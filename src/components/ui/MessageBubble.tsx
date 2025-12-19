@@ -15,8 +15,8 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
       <div
         className={
           isUser
-            ? "px-3 py-2 rounded-lg bg-blue-600 text-sm text-white max-w-4/5 break-all"
-            : "px-3 py-2 rounded-lg bg-[#1F1F1F] text-sm text-gray-100 max-w-4/5 break-all"
+            ? "px-3 py-2 rounded-lg bg-blue-600 text-sm text-white max-w-4/5 whitespace-pre-wrap wrap-break-word"
+            : "px-3 py-2 rounded-lg bg-[#1F1F1F] text-sm text-gray-100 max-w-4/5 whitespace-pre-wrap wrap-break-word"
         }
       >
         {message.text}

@@ -1,7 +1,23 @@
 import { useState } from "react";
-import Menu from "./SidebarMenu";
+import {
+  PanelLeftClose,
+  PanelLeftOpen,
+  SearchIcon,
+  SquarePen,
+} from "lucide-react";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import GenerateMainBar from "./MainBarGenerator";
 
-function Sidebar() {
+interface sidebarProps {
+  onNewChat: () => void;
+}
+
+function Sidebar({ onNewChat }: sidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   function toggleSidebar() {
     if (isOpen) setIsOpen(false);
@@ -10,27 +26,65 @@ function Sidebar() {
 
   return (
     <>
-      {/* Button */}
-      <button
-        type="button"
-        onClick={toggleSidebar}
-        aria-label="Toggle sidebar"
-        aria-expanded={isOpen}
-        className="fixed left-4 top-4 z-60 grid h-12 w-12 place-items-center rounded-full bg-zinc-800/70 backdrop-blur border border-zinc-700"
-      >
-        <span className="block h-0.5 w-6 rounded bg-white" />
-        <span className="mt-1.5 block h-0.5 w-6 rounded bg-white" />
-      </button>
-
       {/* Sidebar */}
       <div
         className={[
-          "fixed md:static z-50 left-0 bg-amber-200 h-full",
-          "transform transition-width duration-300 ease-in-out will-change-transform",
-          isOpen ? "w-5/6 md:w-1/6" : " w-0",
+          "fixed md:static z-50 left-0 bg-amber-200 h-full @container ",
+          "transform transition-all duration-300 ease-in-out will-change-transform",
+          isOpen ? "w-5/6 md:w-96" : "w-0 md:w-20",
         ].join(" ")}
       >
-        <Menu className={isOpen ? "translate-0" : "-translate-x-full"} />
+        {/* Top bar */}
+        <div className="flex place-content-center items-center m-2 my-4">
+          {/* Search */}
+          <InputGroup
+            className={[
+              "flex-initial overflow-hidden",
+              "transition-all duration-300 ease-in-out",
+              isOpen ? "w-full opacity-100" : "w-0 opacity-0",
+            ].join(" ")}
+          >
+            <InputGroupInput placeholder="Search..." />
+            <InputGroupAddon>
+              <SearchIcon />
+            </InputGroupAddon>
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton>Search</InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+
+          {/* Button */}
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label="Toggle sidebar"
+            aria-expanded={isOpen}
+            className={[
+              "shrink-0 grid place-items-center h-8 w-8 md:h-12 md:w-12 object-center",
+              "transform transition-all duration-300 ease-in-out will-change-transform",
+              isOpen ? "translate-0 ml-4" : "translate-x-8 md:translate-0",
+            ].join(" ")}
+          >
+            {isOpen ? (
+              <PanelLeftClose size={30} />
+            ) : (
+              <PanelLeftOpen size={30} />
+            )}
+          </button>
+        </div>
+
+        {/* Main Bar */}
+        <div>
+          {/* New chat */}
+          <GenerateMainBar
+            isOpened={isOpen}
+            item={{
+              icon: SquarePen,
+              label: "New chat",
+              onClick: onNewChat,
+            }}
+          />
+        </div>
       </div>
     </>
   );

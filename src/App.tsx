@@ -37,11 +37,16 @@ function App() {
   return (
     <div className="h-screen w-screen flex ">
       {/* Sidebar */}
-      <Sidebar />
+      <Sidebar
+        onNewChat={() => {
+          setMessages([]);
+        }}
+      />
       {/* Main */}
       <div className="flex-1 min-w-0 overflow-y-scroll transition-width duration-300 ease-in-out">
         {/* Blur */}
-        <div className="fixed z-0 bottom-0 from-pink-600 to-100% bg-linear-0 w-full h-16"></div>
+        <div className="fixed z-0 bottom-0 from-white to-100% bg-linear-0 w-full h-1/12"></div>
+        <div className="fixed z-0 top-0 from-white to-100% bg-linear-180 w-full h-1/12"></div>
         {/* Chat */}
         <div className="mx-auto flex flex-col p-8 max-w-5xl ">
           {/* Bubble */}
