@@ -27,7 +27,7 @@ export default defineConfig([
 
       parserOptions: {         // <-- tambah
         tsconfigRootDir,       // <-- FIX UTAMA
-        project: ["./tsconfig.app.json"], // ← FIX UTAM
+        project: ["./tsconfig.app.json", "./tsconfig.node.json"], // ← FIX UTAM
         // atau: project: true
       },
     },

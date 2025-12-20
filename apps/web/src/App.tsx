@@ -25,13 +25,26 @@ function App() {
 
   useEffect(() => {
     if (!shouldAutoScrollRef.current) return;
+    const target = scrollRef.current;
+    if (!target) return;
+
+    let cleanupNext: (() => void) | undefined;
     const frame = requestAnimationFrame(() => {
-      const target = scrollRef.current;
-      if (!target) return;
-      target.scrollTo({ top: target.scrollHeight, behavior: "smooth" });
+      const nextFrame = requestAnimationFrame(() => {
+        const distanceToBottom =
+          target.scrollHeight - target.scrollTop - target.clientHeight;
+        const behavior: ScrollBehavior = distanceToBottom < 120 ? "smooth" : "auto";
+
+        target.scrollTo({ top: target.scrollHeight, behavior });
+      });
+
+      cleanupNext = () => cancelAnimationFrame(nextFrame);
     });
 
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cleanupNext?.();
+      cancelAnimationFrame(frame);
+    };
   }, [isStreaming, messages]);
 
   useEffect(() => {
@@ -159,6 +172,8 @@ function App() {
                 typeof patch.type === "string" ? patch.type : msg.type;
               const { role: _role, type: _type, ...rest } =
                 patch as Record<string, unknown>;
+              void _role;
+              void _type;
 
               return {
                 ...msg,
@@ -235,7 +250,7 @@ function App() {
         <div className="fixed z-0 bottom-0 from-white to-100% bg-linear-0 w-full h-1/12"></div>
         <div className="fixed z-0 top-0 from-white to-100% bg-linear-180 w-full h-1/12"></div>
         {/* Chat */}
-        <div className="mx-auto flex flex-col px-8 pt-12 pb-32 max-w-5xl ">
+        <div className="mx-auto flex flex-col px-8 pt-20 pb-64 max-w-5xl gap-4">
           {isLoadingHistory && (
             <div className="text-sm text-gray-500">Memuat riwayat...</div>
           )}
