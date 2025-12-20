@@ -15,12 +15,48 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
+  const [inputHeight, setInputHeight] = useState(0);
+  const [edgeSpace, setEdgeSpace] = useState(64);
+
+  const bottomSpace = Math.max(128, inputHeight + edgeSpace);
+  const autoScrollThreshold = Math.max(80, bottomSpace);
 
   useEffect(() => {
     return () => {
       streamAbortRef.current?.abort();
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const updateEdgeSpace = () => {
+      const viewportHeight = window.innerHeight || 0;
+      const nextEdgeSpace = Math.max(64, Math.round(viewportHeight / 12) + 16);
+      setEdgeSpace(nextEdgeSpace);
+    };
+
+    updateEdgeSpace();
+    window.addEventListener("resize", updateEdgeSpace);
+    return () => window.removeEventListener("resize", updateEdgeSpace);
+  }, []);
+
+  useEffect(() => {
+    const target = inputRef.current;
+    if (!target) return;
+
+    const updateHeight = () => {
+      const nextHeight = Math.round(target.getBoundingClientRect().height);
+      setInputHeight((prev) => (prev === nextHeight ? prev : nextHeight));
+    };
+
+    updateHeight();
+
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(target);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -32,7 +68,7 @@ function App() {
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [isStreaming, messages]);
+  }, [isStreaming, messages, bottomSpace]);
 
   useEffect(() => {
     if (!conversationId || messages.length > 0) return;
@@ -227,7 +263,7 @@ function App() {
           if (!target) return;
           const distance =
             target.scrollHeight - target.scrollTop - target.clientHeight;
-          shouldAutoScrollRef.current = distance < 80;
+          shouldAutoScrollRef.current = distance < autoScrollThreshold;
         }}
         className="flex-1 min-w-0 overflow-y-scroll transition-width duration-300 ease-in-out"
       >
@@ -235,7 +271,10 @@ function App() {
         <div className="fixed z-0 bottom-0 from-white to-100% bg-linear-0 w-full h-1/12"></div>
         <div className="fixed z-0 top-0 from-white to-100% bg-linear-180 w-full h-1/12"></div>
         {/* Chat */}
-        <div className="mx-auto flex flex-col px-8 pt-12 pb-32 max-w-5xl ">
+        <div
+          className="mx-auto flex flex-col px-8 max-w-5xl"
+          style={{ paddingTop: edgeSpace, paddingBottom: bottomSpace }}
+        >
           {isLoadingHistory && (
             <div className="text-sm text-gray-500">Memuat riwayat...</div>
           )}
@@ -243,7 +282,11 @@ function App() {
           {/* Bubble */}
           <MessageList messages={messages} />
           {/* Input */}
-          <MessageInput onSend={handleSend} disabled={isStreaming} />
+          <MessageInput
+            onSend={handleSend}
+            disabled={isStreaming}
+            containerRef={inputRef}
+          />
         </div>
       </div>
     </div>

@@ -17,7 +17,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import type { MessageInputProps } from "../../types/ui";
 
-function MessageInput({ onSend, disabled }: MessageInputProps) {
+function MessageInput({ onSend, disabled, containerRef }: MessageInputProps) {
   const [text, setText] = useState<string>("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -33,7 +33,10 @@ function MessageInput({ onSend, disabled }: MessageInputProps) {
   }
 
   return (
-    <InputGroup className="fixed bottom-10 bg-white rounded-2xl max-w-10/12 md:max-w-2/5 self-center overflow-y-auto max-h-40 mx-8">
+    <InputGroup
+      ref={containerRef}
+      className="fixed bottom-10 bg-white rounded-2xl max-w-10/12 md:max-w-2/5 self-center overflow-y-auto max-h-40 mx-8"
+    >
       <InputGroupTextarea
         placeholder="Ask, Search or Chat..."
         ref={textareaRef}

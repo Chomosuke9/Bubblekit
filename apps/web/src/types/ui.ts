@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { Ref } from "react";
 import type { Message } from "./Message";
 
 export interface MainBarProps {
@@ -20,6 +21,7 @@ export interface MessageBubbleProps {
 export interface MessageInputProps {
   onSend: (text: string) => void;
   disabled?: boolean;
+  containerRef?: Ref<HTMLDivElement>;
 }
 
 export interface MessageListProps {

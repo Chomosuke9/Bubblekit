@@ -6,9 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
-function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
+const InputGroup = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentProps<"div">
+>(function InputGroup({ className, ...props }, ref) {
   return (
     <div
+      ref={ref}
       data-slot="input-group"
       role="group"
       className={cn(
@@ -32,7 +36,9 @@ function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
       {...props}
     />
   )
-}
+})
+
+InputGroup.displayName = "InputGroup"
 
 const inputGroupAddonVariants = cva(
   "text-muted-foreground flex h-auto cursor-text items-center justify-center gap-2 py-1.5 text-sm font-medium select-none [&>svg:not([class*='size-'])]:size-4 [&>kbd]:rounded-[calc(var(--radius)-5px)] group-data-[disabled=true]/input-group:opacity-50",
