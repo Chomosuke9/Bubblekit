@@ -16,7 +16,7 @@ interface FetchHistoryOptions {
 interface StreamChatOptions {
   baseUrl?: string;
   conversationId?: string;
-  message: string;
+  message?: string;
   signal?: AbortSignal;
   onEvent: (event: StreamEvent) => void;
 }

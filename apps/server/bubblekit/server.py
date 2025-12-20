@@ -24,7 +24,7 @@ from .runtime import (
 
 class ChatStreamRequest(BaseModel):
     conversationId: Optional[str] = None
-    message: str
+    message: Optional[str] = None
 
 
 def create_app(
@@ -79,12 +79,18 @@ def create_app(
                     if inspect.isawaitable(result):
                         await result
 
+                message_text = None
+                if payload.message is not None:
+                    message_text = str(payload.message)
+
                 if on.message_handler is None:
+                    return
+                if message_text is None or not message_text.strip():
                     return
 
                 ctx = MessageContext(
                     conversation_id=conversation_id,
-                    message=str(payload.message),
+                    message=message_text,
                 )
                 result = on.message_handler(ctx)
                 if inspect.isawaitable(result):
