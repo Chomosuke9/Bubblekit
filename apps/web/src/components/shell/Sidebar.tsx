@@ -13,11 +13,9 @@ import {
 } from "@/components/ui/input-group";
 import GenerateMainBar from "./MainBarGenerator";
 
-interface sidebarProps {
-  onNewChat: () => void;
-}
+import type { SidebarProps } from "../../types/ui";
 
-function Sidebar({ onNewChat }: sidebarProps) {
+function Sidebar({ onNewChat }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   function toggleSidebar() {
     if (isOpen) setIsOpen(false);

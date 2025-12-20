@@ -1,16 +1,4 @@
-import type { LucideIcon } from "lucide-react";
-
-interface GenerateMainBarProps {
-  isOpened: boolean;
-  item: MainBarProps;
-}
-
-interface MainBarProps {
-  icon: LucideIcon;
-  label: string;
-  alwaysShow?: boolean;
-  onClick: () => void;
-}
+import type { GenerateMainBarProps } from "../../types/ui";
 
 function GenerateMainBar({ isOpened, item }: GenerateMainBarProps) {
   const Icon = item.icon;

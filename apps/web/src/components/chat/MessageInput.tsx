@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { IconPlus } from "@tabler/icons-react";
 import { ArrowUpIcon } from "lucide-react";
 import {
@@ -15,28 +15,31 @@ import {
   InputGroupTextarea,
 } from "@/components/ui/input-group";
 import { Separator } from "@/components/ui/separator";
+import type { MessageInputProps } from "../../types/ui";
 
-interface MessageInputProps {
-  onSend: (text: string) => void;
-}
-
-function MessageInput({ onSend }: MessageInputProps) {
+function MessageInput({ onSend, disabled }: MessageInputProps) {
   const [text, setText] = useState<string>("");
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   function doSend() {
+    if (disabled) return;
     const trimmed = text.trim();
     if (!trimmed) return;
     onSend(trimmed);
     setText("");
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
   }
 
   return (
     <InputGroup className="fixed bottom-10 bg-white rounded-2xl max-w-10/12 md:max-w-2/5 self-center overflow-y-auto max-h-40 mx-8">
       <InputGroupTextarea
         placeholder="Ask, Search or Chat..."
+        ref={textareaRef}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey && text.trim()) {
+          if (e.key === "Enter" && !e.shiftKey && text.trim() && !disabled) {
             e.preventDefault();
             doSend();
           }
@@ -72,7 +75,7 @@ function MessageInput({ onSend }: MessageInputProps) {
           variant="default"
           className="rounded-full"
           size="icon-xs"
-          disabled={!text.trim()}
+          disabled={!text.trim() || disabled}
           onClick={() => {
             doSend();
           }}

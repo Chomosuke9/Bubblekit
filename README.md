@@ -1,73 +1,67 @@
-# React + TypeScript + Vite
+# Bubblekit
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Bubblekit is a lightweight LLM chat UI + backend starter. The repo is structured as a small monorepo so you can swap the LLM logic while keeping a ready-made frontend.
 
-Currently, two official plugins are available:
+## Structure
+- `apps/web` - React + Vite frontend
+- `apps/server` - FastAPI backend with NDJSON streaming
+- `packages/shared` - reserved for shared types/contracts
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Quick start
+### Frontend
+```sh
+cd apps/web
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Set the API base URL for local dev:
+```sh
+VITE_API_BASE_URL=http://localhost:8000
 ```
+
+### Backend
+```sh
+cd apps/server
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+## Backend SDK usage
+Bubblekit exposes a small server SDK so you only write handlers.
+
+```py
+from bubblekit import on, bubble, load, create_app
+
+@on.message
+async def on_message(ctx):
+    b = bubble(role="assistant", type="text")
+    for chunk in ctx.message.split():
+        b.stream(chunk + " ")
+    b.done()
+
+@on.history
+def on_history(conversation_id):
+    context = db.load(conversation_id)
+    return load(context)
+
+app = create_app()
+```
+
+Bubble methods:
+- `bubble.set(text)` replaces content.
+- `bubble.stream(text)` appends.
+- `bubble.config(**patch)` merges config and emits style changes.
+- `bubble.done()` marks the bubble idle (auto-finalized if omitted).
+- `access_bubble(id)` edits another bubble in the active session.
+
+## Streaming contract (NDJSON)
+Each line is a JSON object:
+- `meta`: `{ "type": "meta", "conversationId": "..." }`
+- `set`: `{ "type": "set", "bubbleId": "...", "content": "..." }`
+- `delta`: `{ "type": "delta", "bubbleId": "...", "content": "..." }`
+- `config`: `{ "type": "config", "bubbleId": "...", "patch": { "type": "tool" } }`
+- `done`: `{ "type": "done", "bubbleId": "..." }`
+- `error`: `{ "type": "error", "message": "..." }`
