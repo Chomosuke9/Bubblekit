@@ -10,13 +10,14 @@ def _chunk_text(text: str, size: int = 1):
         yield text[i : i + size]
 
 
-count = 0
+count: int = 0
 
 
-def _cycle_name():
+def _cycle_name() -> str:
     global count
     count = count + 1
-    return count
+    str_count: str = str(count)
+    return str_count
 
 
 @on.message
@@ -36,6 +37,7 @@ async def on_message(ctx):
 
 @on.new_chat
 def handle_new_chat(conversation_id):
+    print("new_chat triggered")
     greeting = bubble(role="assistant", type="text")
     greeting.set("Halo! Ada yang bisa dibantu?")
     greeting.done()

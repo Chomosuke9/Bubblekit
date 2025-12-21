@@ -5,7 +5,7 @@ import contextvars
 import uuid
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, overload
 
 
 def _new_id() -> str:
@@ -14,6 +14,8 @@ def _new_id() -> str:
 
 _UNSET = object()
 _COLOR_AUTO = "auto"
+
+ColorValue = Optional[str]
 
 
 def _is_unset_color(value: Any) -> bool:
@@ -92,7 +94,13 @@ def _build_config_patch(
     return patch
 
 
-def _validate_extra_config_fields(extra: Dict[str, Any], source: str) -> None:
+def _validate_extra_config_fields(
+    extra: Optional[Dict[str, Any]], source: str
+) -> Optional[Dict[str, Any]]:
+    if extra is None:
+        return None
+    if not isinstance(extra, dict):
+        raise TypeError(f"{source} extra must be a dict.")
     if "id" in extra:
         raise ValueError(f"{source} cannot update id.")
     if "config" in extra:
@@ -101,6 +109,7 @@ def _validate_extra_config_fields(extra: Dict[str, Any], source: str) -> None:
         raise ValueError(
             f"{source} does not accept colors=. Use bubble_*_color/header_*_color."
         )
+    return extra
 
 
 @dataclass
@@ -297,6 +306,25 @@ class Bubble:
         self._state.content += chunk
         self._session.emit({"type": "delta", "bubbleId": self.id, "content": chunk})
 
+    @overload
+    def config(
+        self,
+        *,
+        role: Optional[str] = ...,
+        type: Optional[str] = ...,
+        name: Optional[str] = ...,
+        icon: Optional[str] = ...,
+        bubble_bg_color: ColorValue = "auto",
+        bubble_text_color: ColorValue = "auto",
+        bubble_border_color: ColorValue = "auto",
+        header_bg_color: ColorValue = "auto",
+        header_text_color: ColorValue = "auto",
+        header_border_color: ColorValue = "auto",
+        header_icon_bg_color: ColorValue = "auto",
+        header_icon_text_color: ColorValue = "auto",
+        extra: Optional[Dict[str, Any]] = ...,
+    ) -> None: ...
+
     def config(
         self,
         *,
@@ -312,9 +340,9 @@ class Bubble:
         header_border_color: Any = _COLOR_AUTO,
         header_icon_bg_color: Any = _COLOR_AUTO,
         header_icon_text_color: Any = _COLOR_AUTO,
-        **extra: Any,
+        extra: Optional[Dict[str, Any]] = None,
     ) -> None:
-        _validate_extra_config_fields(extra, "bubble.config()")
+        extra = _validate_extra_config_fields(extra, "bubble.config()")
 
         patch: Dict[str, Any] = {}
         if role is not _UNSET:
@@ -378,6 +406,26 @@ class Bubble:
             )
 
 
+@overload
+def bubble(
+    *,
+    id: Optional[str] = None,
+    role: str = "assistant",
+    type: str = "text",
+    name: Optional[str] = ...,
+    icon: Optional[str] = ...,
+    bubble_bg_color: ColorValue = "auto",
+    bubble_text_color: ColorValue = "auto",
+    bubble_border_color: ColorValue = "auto",
+    header_bg_color: ColorValue = "auto",
+    header_text_color: ColorValue = "auto",
+    header_border_color: ColorValue = "auto",
+    header_icon_bg_color: ColorValue = "auto",
+    header_icon_text_color: ColorValue = "auto",
+    extra: Optional[Dict[str, Any]] = ...,
+) -> Bubble: ...
+
+
 def bubble(
     *,
     id: Optional[str] = None,
@@ -393,9 +441,9 @@ def bubble(
     header_border_color: Any = _COLOR_AUTO,
     header_icon_bg_color: Any = _COLOR_AUTO,
     header_icon_text_color: Any = _COLOR_AUTO,
-    **extra: Any,
+    extra: Optional[Dict[str, Any]] = None,
 ) -> Bubble:
-    _validate_extra_config_fields(extra, "bubble()")
+    extra = _validate_extra_config_fields(extra, "bubble()")
 
     ctx = _get_active_context(require_stream=True)
     bubble_id = id or _new_id()

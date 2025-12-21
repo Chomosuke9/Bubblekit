@@ -102,7 +102,7 @@ bubble(
     header_border_color="auto",
     header_icon_bg_color="auto",
     header_icon_text_color="auto",
-    **extra,
+    extra=None,
 )
 ```
 
@@ -188,7 +188,7 @@ async def stream_example():
 #### bubble.config(...)
 Updates the bubble config and sends a `config` event. You may change `role`,
 `type`, and other config fields (except `id`).
-Signature matches `bubble()` (flat params + `**extra`).
+Signature matches `bubble()` (flat params + `extra` dict).
 
 ```py
 from bubblekit import bubble
@@ -208,7 +208,7 @@ The frontend renders these config fields when present:
 - `header_*_color`: `header_bg_color`, `header_text_color`, `header_border_color`,
   `header_icon_bg_color`, `header_icon_text_color`.
 - Color params default to `"auto"` (use theme defaults).
-- `**extra`: additional config fields forwarded to the UI (e.g. `badge`, `tone`).
+- `extra`: optional dict of additional config fields forwarded to the UI (e.g. `badge`, `tone`).
 
 #### bubble.done()
 Marks the bubble as completed. If you forget to call it, the server will

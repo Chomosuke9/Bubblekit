@@ -116,8 +116,8 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
         <div
           className={
             isUser
-              ? "px-3 py-2 rounded-lg border border-transparent bg-neutral-200 text-sm text-neutral-900 dark:bg-neutral-700 dark:text-neutral-100 whitespace-pre-wrap wrap-break-word"
-              : "px-3 py-2 rounded-lg border border-transparent bg-neutral-100 text-sm text-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 whitespace-pre-wrap wrap-break-word"
+              ? "px-3 py-2 rounded-lg border border-transparent bg-neutral-200 text-sm text-neutral-900 dark:bg-neutral-700 dark:text-neutral-100 whitespace-pre-wrap break-all"
+              : "px-3 py-2 rounded-lg border border-transparent bg-neutral-100 text-sm text-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 whitespace-pre-wrap break-all"
           }
           style={bubbleStyle}
         >
