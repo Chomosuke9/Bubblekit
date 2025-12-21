@@ -118,15 +118,19 @@ export async function streamChat({
 
   while (true) {
     const { value, done } = await reader.read();
+
+    if (value) {
+      buffer += decoder.decode(value, { stream: !done });
+      buffer = parseStreamLines(buffer, onEvent);
+    }
+
     if (done) {
       buffer += decoder.decode();
       break;
     }
-
-    buffer += decoder.decode(value, { stream: true });
-    buffer = parseStreamLines(buffer, onEvent);
   }
 
+  buffer = parseStreamLines(buffer, onEvent);
   const trimmed = buffer.trim();
   if (trimmed) {
     onEvent(JSON.parse(trimmed) as StreamEvent);

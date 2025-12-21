@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import MessageInput from "./components/chat/MessageInput";
 import MessageList from "./components/chat/MessageList";
 import type { Message } from "./types/Message";
@@ -84,6 +84,8 @@ function App() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const streamAbortRef = useRef<AbortController | null>(null);
   const skipHistoryRef = useRef(false);
+  const didInitChatRef = useRef(false);
+  const didSkipAbortRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -95,7 +97,12 @@ function App() {
 
   useEffect(() => {
     return () => {
+      if (import.meta.env.DEV && !didSkipAbortRef.current) {
+        didSkipAbortRef.current = true;
+        return;
+      }
       streamAbortRef.current?.abort();
+      streamAbortRef.current = null;
     };
   }, []);
 
@@ -204,7 +211,7 @@ function App() {
     };
   }, [conversationId, messages.length]);
 
-  function getEventId(event: StreamEvent) {
+  const getEventId = useCallback((event: StreamEvent) => {
     if ("bubbleId" in event && event.bubbleId) {
       return event.bubbleId;
     }
@@ -212,123 +219,129 @@ function App() {
       return event.messageId;
     }
     return undefined;
-  }
+  }, []);
 
-  function updateMessageFromEvent(
-    event: StreamEvent,
-    eventId: string | undefined,
-    fallbackId?: string,
-  ) {
-    if (
-      event.type !== "set" &&
-      event.type !== "delta" &&
-      event.type !== "config" &&
-      event.type !== "done"
-    ) {
-      return;
-    }
-
-    setMessages((prev) => {
-      let next = prev;
-      let targetIndex = -1;
-
-      if (eventId) {
-        targetIndex = prev.findIndex((msg) => msg.id === eventId);
+  const updateMessageFromEvent = useCallback(
+    (
+      event: StreamEvent,
+      eventId: string | undefined,
+      fallbackId?: string,
+    ) => {
+      if (
+        event.type !== "set" &&
+        event.type !== "delta" &&
+        event.type !== "config" &&
+        event.type !== "done"
+      ) {
+        return;
       }
 
-      if (targetIndex === -1 && fallbackId) {
-        const fallbackIndex = prev.findIndex((msg) => msg.id === fallbackId);
-        if (fallbackIndex !== -1) {
-          next = [...prev];
-          targetIndex = fallbackIndex;
-          if (eventId && next[targetIndex].id !== eventId) {
-            next[targetIndex] = { ...next[targetIndex], id: eventId };
+      setMessages((prev) => {
+        let next = prev;
+        let targetIndex = -1;
+
+        if (eventId) {
+          targetIndex = prev.findIndex((msg) => msg.id === eventId);
+        }
+
+        if (targetIndex === -1 && fallbackId) {
+          const fallbackIndex = prev.findIndex((msg) => msg.id === fallbackId);
+          if (fallbackIndex !== -1) {
+            next = [...prev];
+            targetIndex = fallbackIndex;
+            if (eventId && next[targetIndex].id !== eventId) {
+              next[targetIndex] = { ...next[targetIndex], id: eventId };
+            }
           }
         }
-      }
 
-      if (targetIndex === -1) {
-        if (!eventId) return prev;
-        next = [
-          ...prev,
-          { id: eventId, role: "assistant", content: "", status: "streaming" },
-        ];
-        targetIndex = next.length - 1;
-      } else if (next === prev) {
-        next = [...prev];
-      }
-
-      const msg = next[targetIndex];
-
-      switch (event.type) {
-        case "set":
-          next[targetIndex] = { ...msg, content: event.content };
-          break;
-        case "delta":
-          next[targetIndex] = {
-            ...msg,
-            content: msg.content + event.content,
-          };
-          break;
-        case "config": {
-          const patch = event.patch ?? {};
-          const role =
-            typeof patch.role === "string"
-              ? (patch.role as Message["role"])
-              : msg.role;
-          const bubbleType =
-            typeof patch.type === "string" ? patch.type : msg.type;
-          const { role: _role, type: _type, ...rest } =
-            patch as Record<string, unknown>;
-
-          next[targetIndex] = {
-            ...msg,
-            role,
-            type: bubbleType,
-            config: mergeConfigPatch(msg.config, rest),
-          };
-          break;
+        if (targetIndex === -1) {
+          if (!eventId) return prev;
+          next = [
+            ...prev,
+            { id: eventId, role: "assistant", content: "", status: "streaming" },
+          ];
+          targetIndex = next.length - 1;
+        } else if (next === prev) {
+          next = [...prev];
         }
-        case "done":
-          next[targetIndex] = { ...msg, status: "done" };
-          break;
-        default:
-          break;
+
+        const msg = next[targetIndex];
+
+        switch (event.type) {
+          case "set":
+            next[targetIndex] = { ...msg, content: event.content };
+            break;
+          case "delta":
+            next[targetIndex] = {
+              ...msg,
+              content: msg.content + event.content,
+            };
+            break;
+          case "config": {
+            const patch = event.patch ?? {};
+            const role =
+              typeof patch.role === "string"
+                ? (patch.role as Message["role"])
+                : msg.role;
+            const bubbleType =
+              typeof patch.type === "string" ? patch.type : msg.type;
+            const { role: _role, type: _type, ...rest } =
+              patch as Record<string, unknown>;
+
+            next[targetIndex] = {
+              ...msg,
+              role,
+              type: bubbleType,
+              config: mergeConfigPatch(msg.config, rest),
+            };
+            break;
+          }
+          case "done":
+            next[targetIndex] = { ...msg, status: "done" };
+            break;
+          default:
+            break;
+        }
+
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleStreamEvent = useCallback(
+    (
+      event: StreamEvent,
+      fallbackId: string | undefined,
+      controller: AbortController,
+    ) => {
+      const eventId = getEventId(event);
+
+      if (event.type === "meta" && event.conversationId) {
+        setConversationId(event.conversationId);
+        return;
       }
 
-      return next;
-    });
-  }
+      if (event.type === "error") {
+        setError(event.message);
+        setMessages((prev) => {
+          const targetId = eventId ?? fallbackId;
+          if (!targetId) return prev;
+          return prev.map((msg) =>
+            msg.id === targetId ? { ...msg, status: "error" } : msg,
+          );
+        });
+        controller.abort();
+        return;
+      }
 
-  function handleStreamEvent(
-    event: StreamEvent,
-    fallbackId: string | undefined,
-    controller: AbortController,
-  ) {
-    const eventId = getEventId(event);
+      updateMessageFromEvent(event, eventId, fallbackId);
+    },
+    [getEventId, updateMessageFromEvent],
+  );
 
-    if (event.type === "meta" && event.conversationId) {
-      setConversationId(event.conversationId);
-      return;
-    }
-
-    if (event.type === "error") {
-      setError(event.message);
-      setMessages((prev) => {
-        const targetId = eventId ?? fallbackId;
-        if (!targetId) return prev;
-        return prev.map((msg) =>
-          msg.id === targetId ? { ...msg, status: "error" } : msg,
-        );
-      });
-      controller.abort();
-      return;
-    }
-
-    updateMessageFromEvent(event, eventId, fallbackId);
-  }
-
-  async function startNewChat() {
+  const startNewChat = useCallback(async () => {
     streamAbortRef.current?.abort();
     streamAbortRef.current = null;
     setIsStreaming(false);
@@ -361,7 +374,14 @@ function App() {
         setIsStreaming(false);
       }
     }
-  }
+  }, [handleStreamEvent]);
+
+  useEffect(() => {
+    if (didInitChatRef.current) return;
+    if (conversationId || messages.length > 0 || isStreaming) return;
+    didInitChatRef.current = true;
+    void startNewChat();
+  }, [conversationId, isStreaming, messages.length, startNewChat]);
 
   async function handleSend(text: string) {
     if (isStreaming) return;
