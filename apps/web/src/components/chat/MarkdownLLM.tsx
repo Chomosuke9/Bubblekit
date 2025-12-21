@@ -3,8 +3,11 @@ import { isValidElement, memo, useEffect, useId, useMemo, useRef } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
+import remarkMath from "remark-math";
 import rehypeRaw from "rehype-raw";
+import rehypeKatex from "rehype-katex";
 import mermaid from "mermaid";
+import "katex/dist/katex.min.css";
 
 type MarkdownLLMProps = {
   markdown: string;
@@ -112,8 +115,8 @@ export const MarkdownLLM = memo(function MarkdownLLM({ markdown, className }: Ma
   return (
     <div className={className ? `markdown-llm ${className}` : "markdown-llm"}>
       <Markdown
-        remarkPlugins={[remarkGfm, remarkBreaks]}
-        rehypePlugins={[rehypeRaw]}
+        remarkPlugins={[remarkMath, remarkGfm, remarkBreaks]}
+        rehypePlugins={[rehypeRaw, rehypeKatex]}
         urlTransform={(url) => url}
         components={{
           a: ({ node, ...props }) => (
