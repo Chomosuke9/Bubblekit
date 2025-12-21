@@ -441,7 +441,7 @@ function App() {
   }
 
   return (
-    <div className="h-screen w-screen flex ">
+    <div className="h-dvh w-full flex overflow-x-hidden">
       {/* Toggle Theme */}
       <button
         type="button"

@@ -156,8 +156,178 @@
   transition-timing-function: ease !important;
 }
 
+.markdown-llm {
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.markdown-llm > :first-child {
+  margin-top: 0;
+}
+
+.markdown-llm > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-llm h1 {
+  font-size: 1.35em;
+  font-weight: 600;
+  margin: 0.6em 0 0.35em;
+}
+
+.markdown-llm h2 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 0.6em 0 0.3em;
+}
+
+.markdown-llm h3 {
+  font-size: 1.15em;
+  font-weight: 600;
+  margin: 0.55em 0 0.25em;
+}
+
+.markdown-llm h4 {
+  font-size: 1.05em;
+  font-weight: 600;
+  margin: 0.5em 0 0.2em;
+}
+
+.markdown-llm h5 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 0.45em 0 0.2em;
+}
+
+.markdown-llm h6 {
+  font-size: 0.95em;
+  font-weight: 600;
+  margin: 0.45em 0 0.2em;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.markdown-llm p {
+  margin: 0.4em 0;
+}
+
+.markdown-llm a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-llm ul,
+.markdown-llm ol {
+  margin: 0.4em 0 0.4em 1.25em;
+  padding: 0;
+}
+
+.markdown-llm ul {
+  list-style: disc;
+}
+
+.markdown-llm ul ul {
+  list-style: circle;
+}
+
+.markdown-llm ol {
+  list-style: decimal;
+}
+
+.markdown-llm ol ol {
+  list-style: lower-alpha;
+}
+
+.markdown-llm li {
+  margin: 0.2em 0;
+}
+
+.markdown-llm blockquote {
+  margin: 0.5em 0;
+  padding: 0.25em 0.75em;
+  border-left: 3px solid var(--border);
+  color: var(--muted-foreground);
+}
+
+.markdown-llm hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 0.8em 0;
+}
+
+.markdown-llm pre {
+  overflow: auto;
+  max-width: 100%;
+  margin: 0.5em 0;
+  padding: 0.65em 0.85em;
+  border-radius: 0.5rem;
+  background: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.markdown-llm code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 0.95em;
+}
+
+.markdown-llm :not(pre) > code {
+  padding: 0.1em 0.3em;
+  border-radius: 0.35em;
+  background: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.markdown-llm pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 0.95em;
+}
+
+.markdown-llm table {
+  display: block;
+  overflow: auto;
+  max-width: 100%;
+  border-collapse: collapse;
+  margin: 0.5em 0;
+}
+
+.markdown-llm th,
+.markdown-llm td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.markdown-llm th {
+  background: var(--muted);
+  font-weight: 600;
+}
+
+.markdown-llm img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+}
+
+.markdown-llm input[type="checkbox"] {
+  margin-right: 0.4em;
+  transform: translateY(1px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .theme-transition * {
     transition-duration: 0ms !important;
+  }
+}
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+  }
+  body {
+    overflow: hidden; /* matikan scrollbar browser */
   }
 }

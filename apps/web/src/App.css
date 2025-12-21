@@ -40,3 +40,24 @@
 .read-the-docs {
   color: #888;
 }
+
+.markdown-llm pre {
+  overflow: auto;
+  max-width: 100%;
+}
+
+.markdown-llm table {
+  display: block;
+  overflow: auto;
+  max-width: 100%;
+  border-collapse: collapse;
+}
+
+.markdown-llm th, .markdown-llm td {
+  border: 1px solid rgba(0,0,0,0.15);
+  padding: 6px 8px;
+}
+
+.markdown-llm code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}

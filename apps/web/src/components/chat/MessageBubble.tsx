@@ -2,6 +2,7 @@ import type { CSSProperties, JSX } from "react";
 import { Bot, User } from "lucide-react";
 import type { BubbleConfig, BubbleColors } from "../../types/Message";
 import type { MessageBubbleProps } from "../../types/ui";
+import MarkdownLLM from "./MarkdownLLM";
 
 const HEADER_BASE_CLASS =
   "flex items-center gap-2 text-xs font-medium text-neutral-500 dark:text-neutral-400";
@@ -121,7 +122,10 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
           }
           style={bubbleStyle}
         >
-          {message.content}
+          <MarkdownLLM
+            markdown={typeof message.content === "string" ? message.content : String(message.content ?? "")}
+          />
+
         </div>
       </div>
     </div>
