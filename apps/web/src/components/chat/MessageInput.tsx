@@ -35,7 +35,7 @@ function MessageInput({ onSend, disabled, containerRef }: MessageInputProps) {
   return (
     <InputGroup
       ref={containerRef}
-      className="fixed bottom-10 bg-white rounded-2xl max-w-10/12 md:max-w-2/5 self-center overflow-y-auto max-h-40 mx-8"
+      className="fixed bottom-10 bg-neutral-100 dark:bg-neutral-900 rounded-2xl max-w-10/12 md:max-w-2/5 self-center overflow-y-auto max-h-40 mx-8"
     >
       <InputGroupTextarea
         placeholder="Ask, Search or Chat..."

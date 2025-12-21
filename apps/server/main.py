@@ -5,18 +5,31 @@ import asyncio
 from bubblekit import bubble, create_app, on
 
 
-def _chunk_text(text: str, size: int = 20):
+def _chunk_text(text: str, size: int = 1):
     for i in range(0, len(text), size):
         yield text[i : i + size]
 
 
+count = 0
+
+
+def _cycle_name():
+    global count
+    count = count + 1
+    return count
+
+
 @on.message
 async def on_message(ctx):
-    reply = bubble(role="assistant", type="text")
+    reply = bubble(
+        role="assistant",
+        type="text",
+    )
     response = f"Echo: {ctx.message}"
     for chunk in _chunk_text(response):
         reply.stream(chunk)
-        await asyncio.sleep(0.03)
+        await asyncio.sleep(0.001)
+        reply.config(name=_cycle_name())
 
     reply.done()
 

@@ -27,7 +27,7 @@ function Sidebar({ onNewChat }: SidebarProps) {
       {/* Sidebar */}
       <div
         className={[
-          "fixed md:static z-50 left-0 bg-amber-200 h-full @container ",
+          "fixed md:static z-50 left-0 bg-neutral-100 dark:bg-neutral-900 h-full @container ",
           "transform transition-all duration-300 ease-in-out will-change-transform",
           isOpen ? "w-5/6 md:w-96" : "w-0 md:w-20",
         ].join(" ")}

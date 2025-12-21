@@ -12,6 +12,97 @@ def _new_id() -> str:
     return uuid.uuid4().hex
 
 
+_UNSET = object()
+_COLOR_AUTO = "auto"
+
+
+def _is_unset_color(value: Any) -> bool:
+    return value is _UNSET or value == _COLOR_AUTO
+
+
+def _merge_colors(existing: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, Any]:
+    merged = dict(existing)
+    for key, value in incoming.items():
+        if key in ("bubble", "header"):
+            if isinstance(value, dict):
+                current = merged.get(key)
+                if isinstance(current, dict):
+                    merged[key] = {**current, **value}
+                else:
+                    merged[key] = dict(value)
+            else:
+                merged[key] = value
+        else:
+            merged[key] = value
+    return merged
+
+
+def _build_config_patch(
+    *,
+    name: Any = _UNSET,
+    icon: Any = _UNSET,
+    bubble_bg_color: Any = _COLOR_AUTO,
+    bubble_text_color: Any = _COLOR_AUTO,
+    bubble_border_color: Any = _COLOR_AUTO,
+    header_bg_color: Any = _COLOR_AUTO,
+    header_text_color: Any = _COLOR_AUTO,
+    header_border_color: Any = _COLOR_AUTO,
+    header_icon_bg_color: Any = _COLOR_AUTO,
+    header_icon_text_color: Any = _COLOR_AUTO,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    patch: Dict[str, Any] = {}
+
+    if name is not _UNSET:
+        patch["name"] = name
+    if icon is not _UNSET:
+        patch["icon"] = icon
+
+    colors: Dict[str, Any] = {}
+    bubble: Dict[str, Any] = {}
+    if not _is_unset_color(bubble_bg_color):
+        bubble["bg"] = bubble_bg_color
+    if not _is_unset_color(bubble_text_color):
+        bubble["text"] = bubble_text_color
+    if not _is_unset_color(bubble_border_color):
+        bubble["border"] = bubble_border_color
+    if bubble:
+        colors["bubble"] = bubble
+
+    header: Dict[str, Any] = {}
+    if not _is_unset_color(header_bg_color):
+        header["bg"] = header_bg_color
+    if not _is_unset_color(header_text_color):
+        header["text"] = header_text_color
+    if not _is_unset_color(header_border_color):
+        header["border"] = header_border_color
+    if not _is_unset_color(header_icon_bg_color):
+        header["iconBg"] = header_icon_bg_color
+    if not _is_unset_color(header_icon_text_color):
+        header["iconText"] = header_icon_text_color
+    if header:
+        colors["header"] = header
+
+    if colors:
+        patch["colors"] = colors
+
+    if extra:
+        patch.update(extra)
+
+    return patch
+
+
+def _validate_extra_config_fields(extra: Dict[str, Any], source: str) -> None:
+    if "id" in extra:
+        raise ValueError(f"{source} cannot update id.")
+    if "config" in extra:
+        raise ValueError(f"{source} does not accept config=. Pass fields directly.")
+    if "colors" in extra:
+        raise ValueError(
+            f"{source} does not accept colors=. Use bubble_*_color/header_*_color."
+        )
+
+
 @dataclass
 class BubbleState:
     id: str
@@ -206,9 +297,46 @@ class Bubble:
         self._state.content += chunk
         self._session.emit({"type": "delta", "bubbleId": self.id, "content": chunk})
 
-    def config(self, **patch: Any) -> None:
-        if "id" in patch:
-            raise ValueError("bubble.config() cannot update id.")
+    def config(
+        self,
+        *,
+        role: Any = _UNSET,
+        type: Any = _UNSET,
+        name: Any = _UNSET,
+        icon: Any = _UNSET,
+        bubble_bg_color: Any = _COLOR_AUTO,
+        bubble_text_color: Any = _COLOR_AUTO,
+        bubble_border_color: Any = _COLOR_AUTO,
+        header_bg_color: Any = _COLOR_AUTO,
+        header_text_color: Any = _COLOR_AUTO,
+        header_border_color: Any = _COLOR_AUTO,
+        header_icon_bg_color: Any = _COLOR_AUTO,
+        header_icon_text_color: Any = _COLOR_AUTO,
+        **extra: Any,
+    ) -> None:
+        _validate_extra_config_fields(extra, "bubble.config()")
+
+        patch: Dict[str, Any] = {}
+        if role is not _UNSET:
+            patch["role"] = role
+        if type is not _UNSET:
+            patch["type"] = type
+
+        patch.update(
+            _build_config_patch(
+                name=name,
+                icon=icon,
+                bubble_bg_color=bubble_bg_color,
+                bubble_text_color=bubble_text_color,
+                bubble_border_color=bubble_border_color,
+                header_bg_color=header_bg_color,
+                header_text_color=header_text_color,
+                header_border_color=header_border_color,
+                header_icon_bg_color=header_icon_bg_color,
+                header_icon_text_color=header_icon_text_color,
+                extra=extra,
+            )
+        )
         self._apply_config(patch, emit=True)
 
     def done(self) -> None:
@@ -235,8 +363,14 @@ class Bubble:
             event_patch["type"] = self._state.type
 
         if patch_copy:
+            incoming_patch = dict(patch_copy)
+            incoming_colors = patch_copy.get("colors")
+            existing_colors = self._state.config.get("colors")
+            if isinstance(incoming_colors, dict) and isinstance(existing_colors, dict):
+                patch_copy["colors"] = _merge_colors(existing_colors, incoming_colors)
+
             self._state.config.update(patch_copy)
-            event_patch.update(patch_copy)
+            event_patch.update(incoming_patch)
 
         if emit and event_patch:
             self._session.emit(
@@ -249,10 +383,19 @@ def bubble(
     id: Optional[str] = None,
     role: str = "assistant",
     type: str = "text",
-    **config: Any,
+    name: Any = _UNSET,
+    icon: Any = _UNSET,
+    bubble_bg_color: Any = _COLOR_AUTO,
+    bubble_text_color: Any = _COLOR_AUTO,
+    bubble_border_color: Any = _COLOR_AUTO,
+    header_bg_color: Any = _COLOR_AUTO,
+    header_text_color: Any = _COLOR_AUTO,
+    header_border_color: Any = _COLOR_AUTO,
+    header_icon_bg_color: Any = _COLOR_AUTO,
+    header_icon_text_color: Any = _COLOR_AUTO,
+    **extra: Any,
 ) -> Bubble:
-    if "id" in config:
-        raise ValueError("bubble() does not accept id inside config.")
+    _validate_extra_config_fields(extra, "bubble()")
 
     ctx = _get_active_context(require_stream=True)
     bubble_id = id or _new_id()
@@ -264,7 +407,21 @@ def bubble(
     instance = Bubble(state, ctx.session)
 
     init_patch = {"role": role_value, "type": type_value}
-    init_patch.update(config)
+    init_patch.update(
+        _build_config_patch(
+            name=name,
+            icon=icon,
+            bubble_bg_color=bubble_bg_color,
+            bubble_text_color=bubble_text_color,
+            bubble_border_color=bubble_border_color,
+            header_bg_color=header_bg_color,
+            header_text_color=header_text_color,
+            header_border_color=header_border_color,
+            header_icon_bg_color=header_icon_bg_color,
+            header_icon_text_color=header_icon_text_color,
+            extra=extra,
+        )
+    )
     instance._apply_config(init_patch, emit=True)
     return instance
 

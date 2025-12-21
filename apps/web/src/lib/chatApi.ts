@@ -1,4 +1,4 @@
-import type { Message } from "@/types/Message";
+import type { BubbleConfig, Message } from "@/types/Message";
 
 export type StreamEvent =
   | { type: "meta"; conversationId: string }
@@ -26,7 +26,7 @@ interface ApiMessage {
   role: Message["role"];
   content: string;
   type?: string;
-  config?: Record<string, unknown>;
+  config?: BubbleConfig;
   createdAt?: string;
 }
 

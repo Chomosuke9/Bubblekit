@@ -82,15 +82,44 @@ def handle_new_chat(conversation_id):
     greeting.done()
 ```
 
-### bubble(id=None, role="assistant", type="text", **config)
+### bubble(...)
 Creates a new bubble and sends the initial config event to the active stream.
 Can only be called inside an `on.message` or `on.new_chat` handler.
+
+Signature (flat params, no `config=`):
+```py
+bubble(
+    id=None,
+    role="assistant",
+    type="text",
+    name=...,
+    icon=...,
+    bubble_bg_color="auto",
+    bubble_text_color="auto",
+    bubble_border_color="auto",
+    header_bg_color="auto",
+    header_text_color="auto",
+    header_border_color="auto",
+    header_icon_bg_color="auto",
+    header_icon_text_color="auto",
+    **extra,
+)
+```
 
 ```py
 from bubblekit import bubble
 
 def build_reply():
-    reply = bubble(role="assistant", type="text", tone="friendly")
+    reply = bubble(
+        role="assistant",
+        type="text",
+        name="Assistant",
+        icon="/icons/bot.svg",
+        bubble_bg_color="#EAF2FF",
+        bubble_text_color="#0B1D39",
+        header_text_color="#2B6CB0",
+        header_icon_bg_color="#D6E4FF",
+    )
     reply.set("Thank you for contacting us.")
     reply.done()
 ```
@@ -156,19 +185,30 @@ async def stream_example():
     b.done()
 ```
 
-#### bubble.config(**patch)
+#### bubble.config(...)
 Updates the bubble config and sends a `config` event. You may change `role`,
 `type`, and other config fields (except `id`).
+Signature matches `bubble()` (flat params + `**extra`).
 
 ```py
 from bubblekit import bubble
 
 def config_example():
     b = bubble(role="assistant", type="text")
-    b.config(type="tool", theme="info")
+    b.config(type="tool", name="Support", icon="/icons/support.svg")
     b.set("Processing data...")
     b.done()
 ```
+
+#### Flat config params
+The frontend renders these config fields when present:
+- `name`: display name. Defaults to `Assistant`, `User`, or `System` based on role. Set to `""`/`None` to hide.
+- `icon`: local icon path (served by the frontend). Defaults to Lucide `Bot`/`User`. Set to `""`/`None` to hide.
+- `bubble_*_color`: `bubble_bg_color`, `bubble_text_color`, `bubble_border_color`.
+- `header_*_color`: `header_bg_color`, `header_text_color`, `header_border_color`,
+  `header_icon_bg_color`, `header_icon_text_color`.
+- Color params default to `"auto"` (use theme defaults).
+- `**extra`: additional config fields forwarded to the UI (e.g. `badge`, `tone`).
 
 #### bubble.done()
 Marks the bubble as completed. If you forget to call it, the server will
@@ -186,6 +226,7 @@ def done_example():
 ### Important notes
 - `bubble()` and `access_bubble()` require an active stream, so they must be called inside `on.message` or `on.new_chat`.
 - `bubble.config()` must not change `id`.
+- `bubble()`/`bubble.config()` do not accept `config=` or `colors=`. Pass fields directly instead.
 - If `bubble.done()` is not called, the server will finalize automatically and issue a warning.
 
 ## HTTP API (client)

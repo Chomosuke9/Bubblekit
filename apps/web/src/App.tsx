@@ -4,8 +4,76 @@ import MessageList from "./components/chat/MessageList";
 import type { Message } from "./types/Message";
 import Sidebar from "./components/shell/Sidebar";
 import { fetchMessageHistory, streamChat, type StreamEvent } from "@/lib/chatApi";
+import { Moon, Sun } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+
+function mergeConfigPatch(
+  current: Message["config"] | undefined,
+  patch: Record<string, unknown>,
+) {
+  const next: Record<string, unknown> = { ...(current ?? {}) };
+
+  if ("colors" in patch) {
+    const incomingColors = patch.colors;
+    if (incomingColors && typeof incomingColors === "object") {
+      const currentColors =
+        next.colors && typeof next.colors === "object"
+          ? (next.colors as Record<string, unknown>)
+          : {};
+      const incoming = incomingColors as Record<string, unknown>;
+      const mergedColors: Record<string, unknown> = { ...currentColors };
+
+      if ("bubble" in incoming) {
+        const incomingBubble = incoming.bubble;
+        if (incomingBubble && typeof incomingBubble === "object") {
+          const currentBubble =
+            currentColors.bubble && typeof currentColors.bubble === "object"
+              ? (currentColors.bubble as Record<string, unknown>)
+              : {};
+          mergedColors.bubble = {
+            ...currentBubble,
+            ...(incomingBubble as Record<string, unknown>),
+          };
+        } else {
+          mergedColors.bubble = incomingBubble;
+        }
+      }
+
+      if ("header" in incoming) {
+        const incomingHeader = incoming.header;
+        if (incomingHeader && typeof incomingHeader === "object") {
+          const currentHeader =
+            currentColors.header && typeof currentColors.header === "object"
+              ? (currentColors.header as Record<string, unknown>)
+              : {};
+          mergedColors.header = {
+            ...currentHeader,
+            ...(incomingHeader as Record<string, unknown>),
+          };
+        } else {
+          mergedColors.header = incomingHeader;
+        }
+      }
+
+      for (const [key, value] of Object.entries(incoming)) {
+        if (key === "bubble" || key === "header") continue;
+        mergedColors[key] = value;
+      }
+
+      next.colors = mergedColors;
+    } else {
+      next.colors = incomingColors;
+    }
+  }
+
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === "colors") continue;
+    next[key] = value;
+  }
+
+  return next as Message["config"];
+}
 
 function App() {
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -13,6 +81,7 @@ function App() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const streamAbortRef = useRef<AbortController | null>(null);
   const skipHistoryRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -29,6 +98,34 @@ function App() {
       streamAbortRef.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    const stored = window.localStorage.getItem("bubblekit-theme");
+    const shouldUseDark =
+      stored === "dark"
+        ? true
+        : stored === "light"
+          ? false
+          : root.classList.contains("dark");
+
+    root.classList.toggle("dark", shouldUseDark);
+    setIsDarkMode(shouldUseDark);
+  }, []);
+
+  function toggleDarkMode() {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    root.classList.add("theme-transition");
+    const next = !root.classList.contains("dark");
+    root.classList.toggle("dark", next);
+    window.localStorage.setItem("bubblekit-theme", next ? "dark" : "light");
+    setIsDarkMode(next);
+    window.setTimeout(() => {
+      root.classList.remove("theme-transition");
+    }, 200);
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -188,7 +285,7 @@ function App() {
             ...msg,
             role,
             type: bubbleType,
-            config: { ...(msg.config ?? {}), ...rest },
+            config: mergeConfigPatch(msg.config, rest),
           };
           break;
         }
@@ -325,6 +422,14 @@ function App() {
 
   return (
     <div className="h-screen w-screen flex ">
+      {/* Toggle Theme */}
+      <button
+        type="button"
+        onClick={toggleDarkMode}
+        className="fixed right-4 top-4 z-50 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 shadow-sm transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
+      >
+        {isDarkMode ? <Moon/> : <Sun/> }
+      </button>
       {/* Sidebar */}
       <Sidebar onNewChat={startNewChat} />
       {/* Main */}
@@ -340,17 +445,23 @@ function App() {
         className="flex-1 min-w-0 overflow-y-scroll transition-width duration-300 ease-in-out"
       >
         {/* Blur */}
-        <div className="fixed z-0 bottom-0 from-white to-100% bg-linear-0 w-full h-1/12"></div>
-        <div className="fixed z-0 top-0 from-white to-100% bg-linear-180 w-full h-1/12"></div>
+        <div className="fixed z-0 bottom-0 from-neutral-50 dark:from-neutral-900 to-100% bg-linear-0 w-full h-1/12"></div>
+        <div className="fixed z-0 top-0 from-neutral-50 dark:from-neutral-900 to-100% bg-linear-180 w-full h-1/12"></div>
         {/* Chat */}
         <div
           className="mx-auto flex flex-col px-8 max-w-5xl"
           style={{ paddingTop: edgeSpace, paddingBottom: bottomSpace }}
         >
           {isLoadingHistory && (
-            <div className="text-sm text-gray-500">Memuat riwayat...</div>
+            <div className="text-sm text-neutral-500 dark:text-neutral-400">
+              Memuat riwayat...
+            </div>
           )}
-          {error && <div className="text-sm text-red-600">{error}</div>}
+          {error && (
+            <div className="text-sm text-neutral-600 dark:text-neutral-300">
+              {error}
+            </div>
+          )}
           {/* Bubble */}
           <MessageList messages={messages} />
           {/* Input */}
