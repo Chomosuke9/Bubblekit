@@ -15,12 +15,14 @@ import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
 import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
+import rehypeRaw from "rehype-raw";
 import mermaid from "mermaid";
 import "katex/dist/katex.min.css";
 
 type MarkdownLLMProps = {
   markdown: string;
   className?: string;
+  safe_mode?: boolean;
 };
 
 let mermaidInitialized = false;
@@ -227,14 +229,26 @@ function MermaidDiagram({ chart }: { chart: string }) {
  * - Mermaid via ```mermaid fences
  * - Unwrap outer ```markdown fences if present
  */
-export const MarkdownLLM = memo(function MarkdownLLM({ markdown, className }: MarkdownLLMProps) {
+export const MarkdownLLM = memo(function MarkdownLLM({
+  markdown,
+  className,
+  safe_mode = false,
+}: MarkdownLLMProps) {
   const normalized = useMemo(() => unwrapOuterMarkdownFence(markdown), [markdown]);
+  const rehypePlugins = useMemo(
+    () =>
+      safe_mode
+        ? [rehypeKatex, [rehypeHighlight, { ignoreMissing: true }]]
+        : [rehypeRaw, rehypeKatex, [rehypeHighlight, { ignoreMissing: true }]],
+    [safe_mode],
+  );
 
   return (
     <div className={className ? `markdown-llm ${className}` : "markdown-llm"}>
       <Markdown
         remarkPlugins={[remarkMath, remarkGfm, remarkBreaks]}
-        rehypePlugins={[rehypeKatex, [rehypeHighlight, { ignoreMissing: true }]]}
+        rehypePlugins={rehypePlugins}
+        skipHtml={safe_mode}
         components={{
           a: ({ node, ...props }) => (
             <a {...props} target="_blank" rel="noopener noreferrer" />
