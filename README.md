@@ -10,7 +10,6 @@ Bubblekit is a lightweight LLM chat UI + backend starter. The repo is structured
 ## Quick start
 ### Frontend
 ```sh
-cd apps/web
 npm install
 npm run dev
 ```
@@ -86,7 +85,7 @@ def handle_new_chat(conversation_id):
 Creates a new bubble and sends the initial config event to the active stream.
 Can only be called inside an `on.message` or `on.new_chat` handler.
 
-Signature (flat params, no `config=`):
+Signature:
 ```py
 bubble(
     id=None,

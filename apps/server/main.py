@@ -34,6 +34,9 @@ async def on_message(ctx):
     reply = bubble(
         role="assistant",
         type="text",
+        bubble_bg_color="#00000000",
+        bubble_border_color="#00000000",
+
     )
 
     final :str= ""

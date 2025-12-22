@@ -1,10 +1,19 @@
 // src/components/MarkdownLLM.tsx
-import { isValidElement, memo, useEffect, useId, useMemo, useRef } from "react";
+import {
+  isValidElement,
+  memo,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
-import rehypeRaw from "rehype-raw";
+import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
 import mermaid from "mermaid";
 import "katex/dist/katex.min.css";
@@ -63,6 +72,115 @@ function unwrapOuterMarkdownFence(input: string): string {
   return input;
 }
 
+function extractText(value: ReactNode): string {
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => extractText(item)).join("");
+  }
+  if (isValidElement(value)) {
+    return extractText(value.props?.children);
+  }
+  return "";
+}
+
+function getLanguageFromClassName(className?: string): string | undefined {
+  if (!className) return undefined;
+  const match = className.match(/(?:language|lang)-([a-z0-9_-]+)/i);
+  return match ? match[1].toLowerCase() : undefined;
+}
+
+type CodeBlockProps = {
+  language?: string;
+  code: string;
+  className?: string;
+  children: ReactNode;
+};
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "0";
+  textarea.style.left = "-9999px";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+
+  let success = false;
+  try {
+    success = document.execCommand("copy");
+  } catch {
+    success = false;
+  } finally {
+    document.body.removeChild(textarea);
+  }
+
+  return success;
+}
+
+function CodeBlock({ language, code, className, children }: CodeBlockProps) {
+  const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
+  const canCopy = typeof document !== "undefined";
+  const label = language ?? "text";
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  async function handleCopy() {
+    if (!canCopy) return;
+    try {
+      const success = await copyToClipboard(code);
+      if (success) {
+        setCopied(true);
+        if (timeoutRef.current !== null) {
+          window.clearTimeout(timeoutRef.current);
+        }
+        timeoutRef.current = window.setTimeout(() => {
+          setCopied(false);
+        }, 2000);
+      }
+    } catch {
+      // Ignore clipboard errors.
+    }
+  }
+
+  return (
+    <div className="markdown-code-block">
+      <div className="markdown-code-header">
+        <span className="markdown-code-lang">{label}</span>
+        <button
+          type="button"
+          className="markdown-code-copy"
+          onClick={handleCopy}
+          disabled={!canCopy}
+          aria-live="polite"
+        >
+          {copied ? "Copied" : "Copy code"}
+        </button>
+      </div>
+      <pre className="markdown-code-pre">
+        <code className={className}>{children}</code>
+      </pre>
+    </div>
+  );
+}
+
 function MermaidDiagram({ chart }: { chart: string }) {
   const reactId = useId().replace(/[:]/g, "_");
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -116,8 +234,7 @@ export const MarkdownLLM = memo(function MarkdownLLM({ markdown, className }: Ma
     <div className={className ? `markdown-llm ${className}` : "markdown-llm"}>
       <Markdown
         remarkPlugins={[remarkMath, remarkGfm, remarkBreaks]}
-        rehypePlugins={[rehypeRaw, rehypeKatex]}
-        urlTransform={(url) => url}
+        rehypePlugins={[rehypeKatex, [rehypeHighlight, { ignoreMissing: true }]]}
         components={{
           a: ({ node, ...props }) => (
             <a {...props} target="_blank" rel="noopener noreferrer" />
@@ -127,19 +244,26 @@ export const MarkdownLLM = memo(function MarkdownLLM({ markdown, className }: Ma
           pre: ({ children, ...props }) => {
             const child = Array.isArray(children) ? children[0] : children;
 
-            if (
-              isValidElement(child) &&
-              (child.type === "code" || (child as any).props?.className)
-            ) {
-              const cls = String((child as any).props?.className ?? "");
-              const isMermaid = /\blanguage-mermaid\b/i.test(cls);
+            if (isValidElement(child)) {
+              const className = (child as any).props?.className as string | undefined;
+              const raw = (child as any).props?.children;
+              const text = extractText(raw).replace(/\n$/, "");
+              const rendered = raw ?? text;
 
-              if (isMermaid) {
-                const raw = (child as any).props?.children ?? "";
-                const text =
-                  Array.isArray(raw) ? raw.join("") : typeof raw === "string" ? raw : String(raw);
+              if (className && /\blanguage-mermaid\b/i.test(className)) {
+                return <MermaidDiagram chart={text} />;
+              }
 
-                return <MermaidDiagram chart={text.replace(/\n$/, "")} />;
+              if (child.type === "code" || className) {
+                return (
+                  <CodeBlock
+                    language={getLanguageFromClassName(className)}
+                    code={text}
+                    className={className}
+                  >
+                    {rendered}
+                  </CodeBlock>
+                );
               }
             }
 

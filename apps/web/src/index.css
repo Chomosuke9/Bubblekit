@@ -80,6 +80,19 @@
   --scrollbar-track: oklch(0.965 0 0);
   --scrollbar-thumb: oklch(0.82 0 0);
   --scrollbar-thumb-hover: oklch(0.72 0 0);
+  --code-fg: oklch(0.3 0.02 260);
+  --code-comment: oklch(0.55 0.03 260);
+  --code-keyword: oklch(0.45 0.12 265);
+  --code-string: oklch(0.5 0.12 145);
+  --code-number: oklch(0.52 0.11 35);
+  --code-title: oklch(0.45 0.12 205);
+  --code-attr: oklch(0.45 0.12 320);
+  --code-built-in: oklch(0.52 0.12 75);
+  --code-variable: oklch(0.45 0.08 25);
+  --code-addition: oklch(0.45 0.12 145);
+  --code-addition-bg: oklch(0.95 0.05 150);
+  --code-deletion: oklch(0.45 0.12 15);
+  --code-deletion-bg: oklch(0.95 0.05 20);
 }
 
 .dark {
@@ -117,6 +130,19 @@
   --scrollbar-track: oklch(0.2 0 0);
   --scrollbar-thumb: oklch(0.42 0 0);
   --scrollbar-thumb-hover: oklch(0.5 0 0);
+  --code-fg: oklch(0.9 0.02 260);
+  --code-comment: oklch(0.65 0.03 260);
+  --code-keyword: oklch(0.78 0.12 265);
+  --code-string: oklch(0.82 0.12 150);
+  --code-number: oklch(0.8 0.12 40);
+  --code-title: oklch(0.78 0.12 205);
+  --code-attr: oklch(0.8 0.12 320);
+  --code-built-in: oklch(0.82 0.12 80);
+  --code-variable: oklch(0.82 0.07 25);
+  --code-addition: oklch(0.82 0.12 150);
+  --code-addition-bg: oklch(0.32 0.08 150 / 35%);
+  --code-deletion: oklch(0.82 0.12 20);
+  --code-deletion-bg: oklch(0.32 0.08 20 / 35%);
 }
 
 @layer base {
@@ -170,41 +196,45 @@
 }
 
 .markdown-llm h1 {
-  font-size: 1.35em;
+  font-size: 2.4em;
   font-weight: 600;
-  margin: 0.6em 0 0.35em;
+  line-height: 1.2;
+  margin: 0.85em 0 0.45em;
 }
 
 .markdown-llm h2 {
-  font-size: 1.25em;
+  font-size: 1.9em;
   font-weight: 600;
-  margin: 0.6em 0 0.3em;
+  line-height: 1.25;
+  margin: 0.8em 0 0.4em;
 }
 
 .markdown-llm h3 {
-  font-size: 1.15em;
+  font-size: 1.65em;
   font-weight: 600;
-  margin: 0.55em 0 0.25em;
+  line-height: 1.25;
+  margin: 0.75em 0 0.35em;
 }
 
 .markdown-llm h4 {
-  font-size: 1.05em;
+  font-size: 1.4em;
   font-weight: 600;
-  margin: 0.5em 0 0.2em;
+  line-height: 1.25;
+  margin: 0.7em 0 0.3em;
 }
 
 .markdown-llm h5 {
-  font-size: 1em;
+  font-size: 1.25em;
   font-weight: 600;
-  margin: 0.45em 0 0.2em;
+  line-height: 1.25;
+  margin: 0.65em 0 0.3em;
 }
 
 .markdown-llm h6 {
-  font-size: 0.95em;
+  font-size: 1.15em;
   font-weight: 600;
-  margin: 0.45em 0 0.2em;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  line-height: 1.25;
+  margin: 0.6em 0 0.25em;
 }
 
 .markdown-llm p {
@@ -256,14 +286,123 @@
   margin: 0.8em 0;
 }
 
+.markdown-code-block {
+  margin: 0.6em 0;
+  border-radius: 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  overflow: hidden;
+}
+
+.markdown-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.35em 0.6em;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--muted) 85%, var(--background));
+  color: var(--muted-foreground);
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: lowercase;
+}
+
+.markdown-code-lang {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+.markdown-code-copy {
+  border-radius: 0.4rem;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted-foreground);
+  padding: 0.2em 0.5em;
+  font-size: 0.85em;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+  cursor: pointer;
+}
+
+.markdown-code-copy:not(:disabled):hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: transparent;
+}
+
+.markdown-code-copy:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.markdown-code-pre {
+  margin: 0;
+  padding: 0.75em 0.9em;
+}
+
+.markdown-code-pre code.hljs {
+  color: var(--code-fg);
+}
+
+.markdown-code-pre code.hljs .hljs-comment,
+.markdown-code-pre code.hljs .hljs-quote {
+  color: var(--code-comment);
+}
+
+.markdown-code-pre code.hljs .hljs-keyword,
+.markdown-code-pre code.hljs .hljs-selector-tag,
+.markdown-code-pre code.hljs .hljs-subst {
+  color: var(--code-keyword);
+}
+
+.markdown-code-pre code.hljs .hljs-string,
+.markdown-code-pre code.hljs .hljs-doctag {
+  color: var(--code-string);
+}
+
+.markdown-code-pre code.hljs .hljs-number,
+.markdown-code-pre code.hljs .hljs-literal,
+.markdown-code-pre code.hljs .hljs-symbol,
+.markdown-code-pre code.hljs .hljs-bullet {
+  color: var(--code-number);
+}
+
+.markdown-code-pre code.hljs .hljs-title,
+.markdown-code-pre code.hljs .hljs-section,
+.markdown-code-pre code.hljs .hljs-name {
+  color: var(--code-title);
+}
+
+.markdown-code-pre code.hljs .hljs-attr,
+.markdown-code-pre code.hljs .hljs-attribute {
+  color: var(--code-attr);
+}
+
+.markdown-code-pre code.hljs .hljs-built_in,
+.markdown-code-pre code.hljs .hljs-builtin-name {
+  color: var(--code-built-in);
+}
+
+.markdown-code-pre code.hljs .hljs-variable,
+.markdown-code-pre code.hljs .hljs-template-variable,
+.markdown-code-pre code.hljs .hljs-type {
+  color: var(--code-variable);
+}
+
+.markdown-code-pre code.hljs .hljs-addition {
+  color: var(--code-addition);
+  background: var(--code-addition-bg);
+}
+
+.markdown-code-pre code.hljs .hljs-deletion {
+  color: var(--code-deletion);
+  background: var(--code-deletion-bg);
+}
+
 .markdown-llm pre {
   overflow: auto;
   max-width: 100%;
-  margin: 0.5em 0;
-  padding: 0.65em 0.85em;
-  border-radius: 0.5rem;
-  background: var(--muted);
-  border: 1px solid var(--border);
+  margin: 0;
 }
 
 .markdown-llm code {
@@ -284,6 +423,8 @@
   border: 0;
   padding: 0;
   font-size: 0.95em;
+  line-height: 1.6;
+  display: block;
 }
 
 .markdown-llm table {
