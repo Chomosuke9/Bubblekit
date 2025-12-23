@@ -16,6 +16,7 @@ import remarkMath from "remark-math";
 import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
+import type { Pluggable, PluggableList } from "unified";
 import mermaid from "mermaid";
 import "katex/dist/katex.min.css";
 
@@ -81,8 +82,8 @@ function extractText(value: ReactNode): string {
   if (Array.isArray(value)) {
     return value.map((item) => extractText(item)).join("");
   }
-  if (isValidElement(value)) {
-    return extractText(value.props?.children);
+  if (isValidElement<{ children?: ReactNode }>(value)) {
+    return extractText(value.props.children);
   }
   return "";
 }
@@ -235,22 +236,26 @@ export const MarkdownLLM = memo(function MarkdownLLM({
   safe_mode = false,
 }: MarkdownLLMProps) {
   const normalized = useMemo(() => unwrapOuterMarkdownFence(markdown), [markdown]);
-  const rehypePlugins = useMemo(
+  const highlightPlugin = [rehypeHighlight, { ignoreMissing: true }] as unknown;
+  const rehypePlugins = useMemo<PluggableList>(
     () =>
       safe_mode
-        ? [rehypeKatex, [rehypeHighlight, { ignoreMissing: true }]]
-        : [rehypeRaw, rehypeKatex, [rehypeHighlight, { ignoreMissing: true }]],
+        ? [rehypeKatex, highlightPlugin as any]
+        : [rehypeRaw, rehypeKatex, highlightPlugin as any],
     [safe_mode],
   );
 
   return (
+    <>
+      {/* MarkdownLLM: container */}
     <div className={className ? `markdown-llm ${className}` : "markdown-llm"}>
+      {/* MarkdownLLM: <Markdown> renderer */}
       <Markdown
         remarkPlugins={[remarkMath, remarkGfm, remarkBreaks]}
         rehypePlugins={rehypePlugins}
         skipHtml={safe_mode}
         components={{
-          a: ({ node, ...props }) => (
+          a: (props) => (
             <a {...props} target="_blank" rel="noopener noreferrer" />
           ),
 
@@ -259,8 +264,9 @@ export const MarkdownLLM = memo(function MarkdownLLM({
             const child = Array.isArray(children) ? children[0] : children;
 
             if (isValidElement(child)) {
-              const className = (child as any).props?.className as string | undefined;
-              const raw = (child as any).props?.children;
+              const childProps = child.props as { className?: string; children?: ReactNode };
+              const className = childProps?.className;
+              const raw = childProps?.children;
               const text = extractText(raw).replace(/\n$/, "");
               const rendered = raw ?? text;
 
@@ -285,9 +291,11 @@ export const MarkdownLLM = memo(function MarkdownLLM({
           },
         }}
       >
+        {/* MarkdownLLM: rendered content */}
         {normalized}
       </Markdown>
     </div>
+    </>
   );
 });
 
