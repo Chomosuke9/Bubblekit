@@ -30,4 +30,10 @@ export interface MessageListProps {
 
 export interface SidebarProps {
   onNewChat: () => void;
+  onSelectConversation: (conversationId: string) => void;
+  conversations: { id: string; title: string; updatedAt: number }[];
+  selectedConversationId: string | null;
+  userId: string;
+  onChangeUserId: (nextUserId: string) => void;
+  onRefreshConversations: () => void;
 }
