@@ -67,6 +67,11 @@ def handle_history(conversation_id):
     return load(history)
 ```
 
+Handlers can also receive the requesting user id. Use either two positional
+parameters `(conversation_id, user_id)` or annotate a single parameter with
+`HistoryContext` (or name it `ctx`) to receive `ctx.conversation_id` and
+`ctx.user_id`.
+
 ### on.new_chat
 Registers a handler that is called when a new chat is created (without
 a `conversationId` from the client).
@@ -79,6 +84,24 @@ def handle_new_chat(conversation_id):
     greeting = bubble(role="assistant", type="text")
     greeting.set("Hello! How can I help?")
     greeting.done()
+```
+
+### set_conversation_list(user_id, conversations) / get_conversation_list(user_id)
+Store or read the in-memory conversation list for a user. The store is keyed by
+`user_id` (falls back to `"anonymous"`). Each conversation entry requires
+`id`, `title`, and `updatedAt` (unix ms integer). The backend preserves the
+order you provide.
+
+```py
+from bubblekit import set_conversation_list
+
+set_conversation_list(
+    "user-123",
+    [
+        {"id": "c1", "title": "Welcome", "updatedAt": 1719541358000},
+        {"id": "c2", "title": "Support", "updatedAt": 1719542358000},
+    ],
+)
 ```
 
 ### bubble(...)
@@ -229,13 +252,35 @@ def done_example():
 - If `bubble.done()` is not called, the server will finalize automatically and issue a warning.
 
 ## HTTP API (client)
-The backend provides 2 main endpoints that can be used by the client.
+The backend provides endpoints that can be used by the client. Requests that
+need user scoping accept an optional `User-Id` header; when omitted the server
+uses `"anonymous"`.
+
+### GET /api/conversations
+Fetches the stored conversation list for the requesting user. The response
+preserves the backend order.
+
+```sh
+curl http://localhost:8000/api/conversations \
+  -H "User-Id: user-123"
+```
+
+Response shape:
+
+```json
+{
+  "conversations": [
+    { "id": "123", "title": "Welcome", "updatedAt": 1719541358000 }
+  ]
+}
+```
 
 ### GET /api/conversations/{conversation_id}/messages
 Fetches chat history.
 
 ```sh
-curl http://localhost:8000/api/conversations/123/messages
+curl http://localhost:8000/api/conversations/123/messages \
+  -H "User-Id: user-123"
 ```
 
 ### POST /api/conversations/stream
@@ -243,7 +288,7 @@ Sends a message and receives an NDJSON stream. If `conversationId` is not sent,
 the server will create a new chat.
 
 ```sh
-curl -N http://localhost:8000/api/conversations/stream   -H "Content-Type: application/json"   -d '{"conversationId":"123","message":"Hello"}'
+curl -N http://localhost:8000/api/conversations/stream   -H "Content-Type: application/json"   -H "User-Id: user-123"   -d '{"conversationId":"123","message":"Hello"}'
 ```
 
 ## Streaming contract (NDJSON)
@@ -254,3 +299,7 @@ Each line is a JSON object:
 - `config`: `{ "type": "config", "bubbleId": "...", "patch": { "type": "tool" } }`
 - `done`: `{ "type": "done", "bubbleId": "..." }`
 - `error`: `{ "type": "error", "message": "..." }`
+
+The web UI includes a User ID input in the sidebar (hidden when collapsed) to
+update the `User-Id` header during development. The value is saved to
+`localStorage` and reused across requests.

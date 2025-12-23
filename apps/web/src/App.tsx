@@ -3,8 +3,15 @@ import MessageInput from "./components/chat/MessageInput";
 import MessageList from "./components/chat/MessageList";
 import type { Message } from "./types/Message";
 import Sidebar from "./components/shell/Sidebar";
-import { fetchMessageHistory, streamChat, type StreamEvent } from "@/lib/chatApi";
+import {
+  fetchConversationList,
+  fetchMessageHistory,
+  streamChat,
+  type ConversationSummary,
+  type StreamEvent,
+} from "@/lib/chatApi";
 import { Moon, Sun } from "lucide-react";
+import { getUserId, setUserId } from "@/lib/userId";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -76,6 +83,8 @@ function mergeConfigPatch(
 }
 
 function App() {
+  const [userId, setUserIdState] = useState<string>(() => getUserId());
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -83,6 +92,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const streamAbortRef = useRef<AbortController | null>(null);
+  const conversationListAbortRef = useRef<AbortController | null>(null);
   const skipHistoryRef = useRef(false);
   const didInitChatRef = useRef(false);
   const didSkipAbortRef = useRef(false);
@@ -103,6 +113,8 @@ function App() {
       }
       streamAbortRef.current?.abort();
       streamAbortRef.current = null;
+      conversationListAbortRef.current?.abort();
+      conversationListAbortRef.current = null;
     };
   }, []);
 
@@ -188,6 +200,7 @@ function App() {
 
     fetchMessageHistory(conversationId, {
       baseUrl: API_BASE,
+      userId,
       signal: controller.signal,
     })
       .then((data) => {
@@ -209,7 +222,7 @@ function App() {
     return () => {
       controller.abort();
     };
-  }, [conversationId, messages.length]);
+  }, [conversationId, messages.length, userId]);
 
   const getEventId = useCallback((event: StreamEvent) => {
     if ("bubbleId" in event && event.bubbleId) {
@@ -341,6 +354,72 @@ function App() {
     [getEventId, updateMessageFromEvent],
   );
 
+  const refreshConversationList = useCallback(
+    async (overrideUserId?: string) => {
+      conversationListAbortRef.current?.abort();
+      const controller = new AbortController();
+      conversationListAbortRef.current = controller;
+      const activeUserId = overrideUserId ?? userId;
+
+      try {
+        const list = await fetchConversationList({
+          baseUrl: API_BASE,
+          signal: controller.signal,
+          userId: activeUserId,
+        });
+        if (!controller.signal.aborted) {
+          setConversations(list);
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+      } finally {
+        if (conversationListAbortRef.current === controller) {
+          conversationListAbortRef.current = null;
+        }
+      }
+    },
+    [userId],
+  );
+
+  useEffect(() => {
+    void refreshConversationList();
+    return () => {
+      conversationListAbortRef.current?.abort();
+      conversationListAbortRef.current = null;
+    };
+  }, [refreshConversationList]);
+
+  const handleChangeUserId = useCallback(
+    (nextUserId: string) => {
+      const normalized = setUserId(nextUserId);
+      setUserIdState(normalized);
+      streamAbortRef.current?.abort();
+      streamAbortRef.current = null;
+      setIsStreaming(false);
+      setIsLoadingHistory(false);
+      setConversationId(null);
+      setMessages([]);
+      setConversations([]);
+      setError(null);
+      shouldAutoScrollRef.current = true;
+      skipHistoryRef.current = false;
+      void refreshConversationList(normalized);
+    },
+    [refreshConversationList],
+  );
+
+  const handleSelectConversation = useCallback((nextConversationId: string) => {
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
+    setIsStreaming(false);
+    setIsLoadingHistory(false);
+    setConversationId(nextConversationId);
+    setMessages([]);
+    setError(null);
+    shouldAutoScrollRef.current = true;
+    skipHistoryRef.current = false;
+  }, []);
+
   const startNewChat = useCallback(async () => {
     streamAbortRef.current?.abort();
     streamAbortRef.current = null;
@@ -359,6 +438,7 @@ function App() {
     try {
       await streamChat({
         baseUrl: API_BASE,
+        userId,
         signal: controller.signal,
         onEvent: (event) => {
           handleStreamEvent(event, undefined, controller);
@@ -373,8 +453,9 @@ function App() {
         streamAbortRef.current = null;
         setIsStreaming(false);
       }
+      void refreshConversationList();
     }
-  }, [handleStreamEvent]);
+  }, [handleStreamEvent, refreshConversationList, userId]);
 
   useEffect(() => {
     if (didInitChatRef.current) return;
@@ -419,6 +500,7 @@ function App() {
         conversationId: conversationId ?? undefined,
         message: trimmed,
         signal: controller.signal,
+        userId,
         onEvent: (event) => {
           handleStreamEvent(event, assistantId, controller);
         },
@@ -437,6 +519,7 @@ function App() {
         streamAbortRef.current = null;
         setIsStreaming(false);
       }
+      void refreshConversationList();
     }
   }
 
@@ -451,7 +534,15 @@ function App() {
         {isDarkMode ? <Moon/> : <Sun/> }
       </button>
       {/* Sidebar */}
-      <Sidebar onNewChat={startNewChat} />
+      <Sidebar
+        onNewChat={startNewChat}
+        conversations={conversations}
+        onSelectConversation={handleSelectConversation}
+        selectedConversationId={conversationId}
+        userId={userId}
+        onChangeUserId={handleChangeUserId}
+        onRefreshConversations={() => void refreshConversationList()}
+      />
       {/* Main */}
       <div
         ref={scrollRef}

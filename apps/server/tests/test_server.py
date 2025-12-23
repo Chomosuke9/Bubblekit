@@ -1,5 +1,6 @@
 import asyncio
 import json
+import json
 import os
 import sys
 import unittest
@@ -8,7 +9,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from bubblekit import bubble, create_app
+from bubblekit import HistoryContext, bubble, create_app, set_conversation_list
 from bubblekit.runtime import on
 from bubblekit.server import ChatStreamRequest
 
@@ -95,3 +96,48 @@ class ServerStreamTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(called["new_chat"])
         self.assertNotIn("meta", [event.get("type") for event in events])
         self.assertIn("Hi", [event.get("content") for event in events if event.get("type") == "set"])
+
+    async def test_conversation_list_endpoint_preserves_order(self):
+        set_conversation_list(
+            "alice",
+            [
+                {"id": "c1", "title": "First", "updatedAt": 100},
+                {"id": "c2", "title": "Second", "updatedAt": 200},
+            ],
+        )
+
+        route = _get_route(self.app, "/api/conversations", "GET")
+        payload = await route.endpoint(user_id_header="alice")
+
+        self.assertEqual(
+            [conv["id"] for conv in payload.get("conversations", [])],
+            ["c1", "c2"],
+        )
+
+    async def test_history_handler_receives_user_id_context(self):
+        received = {}
+
+        def history_handler(ctx: HistoryContext):
+            received["ctx"] = (ctx.conversation_id, ctx.user_id)
+            return []
+
+        on.history_handler = history_handler
+
+        route = _get_route(self.app, "/api/conversations/{conversation_id}/messages", "GET")
+        await route.endpoint(conversation_id="abc", user_id_header="user-123")
+
+        self.assertEqual(received.get("ctx"), ("abc", "user-123"))
+
+    async def test_history_handler_two_params_backward_compatible(self):
+        received = {}
+
+        def history_handler(conversation_id, user_id):
+            received["args"] = (conversation_id, user_id)
+            return []
+
+        on.history_handler = history_handler
+
+        route = _get_route(self.app, "/api/conversations/{conversation_id}/messages", "GET")
+        await route.endpoint(conversation_id="abc", user_id_header=None)
+
+        self.assertEqual(received.get("args"), ("abc", "anonymous"))
