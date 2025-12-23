@@ -9,7 +9,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from bubblekit import HistoryContext, bubble, create_app, set_conversation_list
+from bubblekit import HistoryContext, NewChatContext, bubble, create_app, set_conversation_list
 from bubblekit.runtime import on
 from bubblekit.server import ChatStreamRequest
 
@@ -141,3 +141,41 @@ class ServerStreamTests(unittest.IsolatedAsyncioTestCase):
         await route.endpoint(conversation_id="abc", user_id_header=None)
 
         self.assertEqual(received.get("args"), ("abc", "anonymous"))
+
+    async def test_new_chat_handler_receives_user_id_context(self):
+        received = {}
+
+        def new_chat_handler(ctx: NewChatContext):
+            received["ctx"] = (ctx.conversation_id, ctx.user_id)
+
+        on.new_chat_handler = new_chat_handler
+
+        route = _get_route(self.app, "/api/conversations/stream", "POST")
+        response = await route.endpoint(
+            ChatStreamRequest(conversationId=None, message=None),
+            user_id_header="user-123",
+        )
+        await _collect_events(response)
+
+        conversation_id, user_id = received.get("ctx", (None, None))
+        self.assertTrue(conversation_id)
+        self.assertEqual(user_id, "user-123")
+
+    async def test_new_chat_handler_two_params_backward_compatible(self):
+        received = {}
+
+        def new_chat_handler(conversation_id, user_id):
+            received["args"] = (conversation_id, user_id)
+
+        on.new_chat_handler = new_chat_handler
+
+        route = _get_route(self.app, "/api/conversations/stream", "POST")
+        response = await route.endpoint(
+            ChatStreamRequest(conversationId=None, message=None),
+            user_id_header=None,
+        )
+        await _collect_events(response)
+
+        conversation_id, user_id = received.get("args", (None, None))
+        self.assertTrue(conversation_id)
+        self.assertEqual(user_id, "anonymous")

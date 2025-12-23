@@ -12,7 +12,7 @@ function GenerateMainBar({ isOpened, item }: GenerateMainBarProps) {
       ].join(" ")}
       aria-label={!isOpened ? item.label : undefined}
     >
-      {/* Icon */}
+      {/* MainBarGenerator: Icon */}
       <span
         className={[
           "absolute top-1/2 -translate-y-1/2 transition-all ease-in-out",
@@ -24,7 +24,7 @@ function GenerateMainBar({ isOpened, item }: GenerateMainBarProps) {
         <Icon className="shrink-0" />
       </span>
 
-      {/* Label */}
+      {/* MainBarGenerator: Label */}
       <span
         className={[
           "ml-8 min-w-0 overflow-hidden whitespace-nowrap text-left",

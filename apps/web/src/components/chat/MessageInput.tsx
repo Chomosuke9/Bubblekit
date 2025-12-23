@@ -16,6 +16,11 @@ import {
 } from "@/components/ui/input-group";
 import { Separator } from "@/components/ui/separator";
 import type { MessageInputProps } from "../../types/ui";
+const isDesktopLike = () =>
+  window.matchMedia("(pointer: fine)").matches &&
+  window.matchMedia("(hover: hover)").matches;
+
+
 
 function MessageInput({ onSend, disabled, containerRef }: MessageInputProps) {
   const [text, setText] = useState<string>("");
@@ -27,9 +32,11 @@ function MessageInput({ onSend, disabled, containerRef }: MessageInputProps) {
     if (!trimmed) return;
     onSend(trimmed);
     setText("");
-    requestAnimationFrame(() => {
-      textareaRef.current?.focus();
-    });
+    if (isDesktopLike()) {
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      })
+    };
   }
 
   return (
@@ -37,6 +44,7 @@ function MessageInput({ onSend, disabled, containerRef }: MessageInputProps) {
       ref={containerRef}
       className="fixed bottom-10 bg-neutral-100 dark:bg-neutral-900 rounded-2xl max-w-10/12 md:max-w-2/5 self-center overflow-y-auto max-h-40 mx-8"
     >
+      {/* Textarea */}
       <InputGroupTextarea
         placeholder="Ask, Search or Chat..."
         ref={textareaRef}
@@ -50,7 +58,9 @@ function MessageInput({ onSend, disabled, containerRef }: MessageInputProps) {
         value={text}
         className="overflow-y-auto "
       />
+      {/* Actions */}
       <InputGroupAddon align="block-end">
+        {/* Add/attachment button */}
         <InputGroupButton
           variant="outline"
           className="rounded-full"
@@ -58,6 +68,7 @@ function MessageInput({ onSend, disabled, containerRef }: MessageInputProps) {
         >
           <IconPlus />
         </InputGroupButton>
+        {/* Mode selector */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <InputGroupButton variant="ghost">Auto</InputGroupButton>
@@ -72,8 +83,11 @@ function MessageInput({ onSend, disabled, containerRef }: MessageInputProps) {
             <DropdownMenuItem>Manual</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        {/* Spacer */}
         <InputGroupText className="ml-auto"></InputGroupText>
+        {/* Divider */}
         <Separator orientation="vertical" className="h-4!" />
+        {/* Send button */}
         <InputGroupButton
           variant="default"
           className="rounded-full"

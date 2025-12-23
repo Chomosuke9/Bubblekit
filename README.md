@@ -80,11 +80,16 @@ a `conversationId` from the client).
 from bubblekit import on, bubble
 
 @on.new_chat
-def handle_new_chat(conversation_id):
+def handle_new_chat(conversation_id, user_id):
     greeting = bubble(role="assistant", type="text")
     greeting.set("Hello! How can I help?")
     greeting.done()
 ```
+
+Handlers can also receive the requesting user id. Use either two positional
+parameters `(conversation_id, user_id)` or annotate a single parameter with
+`NewChatContext` (or name it `ctx`) to receive `ctx.conversation_id` and
+`ctx.user_id`.
 
 ### set_conversation_list(user_id, conversations) / get_conversation_list(user_id)
 Store or read the in-memory conversation list for a user. The store is keyed by

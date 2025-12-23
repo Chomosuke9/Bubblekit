@@ -73,6 +73,9 @@ def _call_new_chat_handler(handler, conversation_id: str, user_id: str):
         )
     ]
 
+    if len(params) >= 2:
+        return handler(conversation_id, user_id)
+
     if len(params) == 1:
         param = params[0]
         annotation = param.annotation

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from bubblekit import bubble, create_app, on
+from bubblekit import bubble, create_app, on, set_conversation_list, load
 from langchain.agents import AgentState, create_agent
 from langchain_ollama import ChatOllama
 
@@ -23,7 +23,10 @@ llm = ChatOllama(
 )
 agent = create_agent(llm)
 
-
+data = [
+    {"id": "1", "role": "user", "type": "text", "content": "Hello"},
+    {"id": "2", "role": "assistant", "type": "text", "content": "Hi"},
+]
 
 
 @on.message
@@ -62,11 +65,26 @@ async def on_message(ctx):
 @on.new_chat
 def handle_new_chat(conversation_id):
     print("new_chat triggered")
+    print("conversation_id : ", conversation_id)
     greeting = bubble(role="assistant", type="text")
     greeting.set("Halo! Ada yang bisa dibantu?")
     greeting.done()
+    set_conversation_list(
+        "User321",
+        [
+            {"id": "c1", "title": "Welcome", "updatedAt": 1719541358000},
+            {"id": "c2", "title": "Support", "updatedAt": 1719542358000},
+        ],
+    )
     global memory
     memory=[]
+
+@on.history
+def handle_history_click(conversation_id, user_id):
+    print("conversation_id : ", conversation_id, "\nuser_id : ", user_id)
+    message = load(data)
+    return message
+
 
 
 app = create_app()

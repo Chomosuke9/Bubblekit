@@ -11,7 +11,7 @@ import {
   type StreamEvent,
 } from "@/lib/chatApi";
 import { Moon, Sun } from "lucide-react";
-import { getUserId, setUserId } from "@/lib/userId";
+import { getUserId, resolveUserId, setUserId } from "@/lib/userId";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -200,7 +200,7 @@ function App() {
 
     fetchMessageHistory(conversationId, {
       baseUrl: API_BASE,
-      userId,
+      userId: resolveUserId(userId),
       signal: controller.signal,
     })
       .then((data) => {
@@ -359,7 +359,7 @@ function App() {
       conversationListAbortRef.current?.abort();
       const controller = new AbortController();
       conversationListAbortRef.current = controller;
-      const activeUserId = overrideUserId ?? userId;
+      const activeUserId = resolveUserId(overrideUserId ?? userId);
 
       try {
         const list = await fetchConversationList({
@@ -438,7 +438,7 @@ function App() {
     try {
       await streamChat({
         baseUrl: API_BASE,
-        userId,
+        userId: resolveUserId(userId),
         signal: controller.signal,
         onEvent: (event) => {
           handleStreamEvent(event, undefined, controller);
@@ -500,7 +500,7 @@ function App() {
         conversationId: conversationId ?? undefined,
         message: trimmed,
         signal: controller.signal,
-        userId,
+        userId: resolveUserId(userId),
         onEvent: (event) => {
           handleStreamEvent(event, assistantId, controller);
         },
@@ -541,7 +541,6 @@ function App() {
         selectedConversationId={conversationId}
         userId={userId}
         onChangeUserId={handleChangeUserId}
-        onRefreshConversations={() => void refreshConversationList()}
       />
       {/* Main */}
       <div

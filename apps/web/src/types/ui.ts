@@ -35,5 +35,4 @@ export interface SidebarProps {
   selectedConversationId: string | null;
   userId: string;
   onChangeUserId: (nextUserId: string) => void;
-  onRefreshConversations: () => void;
 }

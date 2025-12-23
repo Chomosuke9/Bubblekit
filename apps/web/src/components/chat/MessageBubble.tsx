@@ -80,6 +80,7 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
     <div
       className={isUser ? "flex justify-end mb-3" : "flex justify-start mb-3"}
     >
+      {/* Bubble column wrapper */}
       <div
         className={
           isUser
@@ -87,6 +88,7 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
             : "flex max-w-4/5 flex-col items-start gap-1"
         }
       >
+        {/* Header */}
         {showHeader && (
           <div
             className={[
@@ -98,6 +100,7 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
               .join(" ")}
             style={headerStyle}
           >
+            {/* Header: Icon */}
             {showIcon && (
               <span className={ICON_BASE_CLASS} style={iconStyle}>
                 {iconUrl ? (
@@ -111,9 +114,11 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
                 )}
               </span>
             )}
+            {/* Header: Name */}
             {showName && <span>{name}</span>}
           </div>
         )}
+        {/* Bubble body */}
         <div
           className={
             isUser
@@ -122,6 +127,7 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
           }
           style={bubbleStyle}
         >
+          {/* Markdown content */}
           <MarkdownLLM
             markdown={typeof message.content === "string" ? message.content : String(message.content ?? "")}
           />
