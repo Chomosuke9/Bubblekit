@@ -5,7 +5,7 @@ import contextvars
 import uuid
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional, overload
+from typing import Any, Dict, Iterable, List, Optional, Sequence, overload
 
 
 def _new_id() -> str:
@@ -223,6 +223,19 @@ class SessionContext:
 class MessageContext:
     conversation_id: str
     message: str
+    user_id: str
+
+
+@dataclass
+class HistoryContext:
+    conversation_id: str
+    user_id: str
+
+
+@dataclass
+class NewChatContext:
+    conversation_id: str
+    user_id: str
 
 
 class HandlerRegistry:
@@ -246,6 +259,7 @@ class HandlerRegistry:
 
 on = HandlerRegistry()
 _store = SessionStore()
+_conversation_lists: Dict[str, List[Dict[str, Any]]] = {}
 _active_context: contextvars.ContextVar[Optional[SessionContext]] = (
     contextvars.ContextVar(
         "bubblekit_active_context",
@@ -254,12 +268,76 @@ _active_context: contextvars.ContextVar[Optional[SessionContext]] = (
 )
 
 
+def _normalize_user_id(user_id: Optional[str]) -> str:
+    if user_id is None:
+        return "anonymous"
+    user_id_str = str(user_id).strip()
+    return user_id_str or "anonymous"
+
+
 def set_active_context(session: BubbleSession, stream: Optional[StreamChannel]):
     return _active_context.set(SessionContext(session=session, stream=stream))
 
 
 def reset_active_context(token) -> None:
     _active_context.reset(token)
+
+
+def _validate_conversation_item(item: Dict[str, Any], index: int) -> Dict[str, Any]:
+    if not isinstance(item, dict):
+        raise TypeError(f"Conversation {index} must be a dict.")
+
+    for field_name in ("id", "title", "updatedAt"):
+        if field_name not in item:
+            raise ValueError(f"Conversation {index} missing required field: {field_name}")
+
+    raw_id = item["id"]
+    if raw_id is None:
+        raise ValueError(f"Conversation {index} id cannot be None.")
+    conv_id = str(raw_id)
+
+    title = item["title"]
+    if not isinstance(title, str):
+        raise TypeError(f"Conversation {index} title must be a string.")
+
+    updated_at = item["updatedAt"]
+    if not isinstance(updated_at, int) or isinstance(updated_at, bool):
+        raise TypeError(f"Conversation {index} updatedAt must be an integer (unix ms).")
+
+    normalized: Dict[str, Any] = {
+        "id": conv_id,
+        "title": title,
+        "updatedAt": updated_at,
+    }
+
+    for key, value in item.items():
+        if key in normalized:
+            continue
+        normalized[key] = value
+
+    return normalized
+
+
+def set_conversation_list(
+    user_id: Optional[str], conversations: Sequence[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    user_key = _normalize_user_id(user_id)
+
+    if not isinstance(conversations, Sequence) or isinstance(conversations, (str, bytes)):
+        raise TypeError("conversations must be a list/sequence of dicts.")
+
+    normalized_list = [
+        _validate_conversation_item(item, index) for index, item in enumerate(conversations)
+    ]
+
+    _conversation_lists[user_key] = normalized_list
+    return list(normalized_list)
+
+
+def get_conversation_list(user_id: Optional[str]) -> List[Dict[str, Any]]:
+    user_key = _normalize_user_id(user_id)
+    stored = _conversation_lists.get(user_key, [])
+    return [dict(item) for item in stored]
 
 
 def _get_active_context(require_stream: bool) -> SessionContext:

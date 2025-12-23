@@ -11,6 +11,7 @@ export type StreamEvent =
 interface FetchHistoryOptions {
   baseUrl?: string;
   signal?: AbortSignal;
+  userId?: string;
 }
 
 interface StreamChatOptions {
@@ -18,7 +19,14 @@ interface StreamChatOptions {
   conversationId?: string;
   message?: string;
   signal?: AbortSignal;
+  userId?: string;
   onEvent: (event: StreamEvent) => void;
+}
+
+interface FetchConversationListOptions {
+  baseUrl?: string;
+  signal?: AbortSignal;
+  userId?: string;
 }
 
 interface ApiMessage {
@@ -34,6 +42,18 @@ interface ApiHistoryResponse {
   conversationId: string;
   messages: ApiMessage[];
 }
+
+interface ApiConversationSummary {
+  id: string;
+  title: string;
+  updatedAt: number;
+}
+
+interface ApiConversationResponse {
+  conversations: ApiConversationSummary[];
+}
+
+export type ConversationSummary = ApiConversationSummary;
 
 function buildUrl(baseUrl: string | undefined, path: string) {
   const base = (baseUrl ?? "").replace(/\/$/, "");
@@ -64,7 +84,12 @@ export async function fetchMessageHistory(
     options.baseUrl,
     `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
   );
-  const response = await fetch(url, { signal: options.signal });
+  const response = await fetch(url, {
+    signal: options.signal,
+    headers: {
+      ...(options.userId ? { "User-Id": options.userId } : {}),
+    },
+  });
 
   if (!response.ok) {
     throw new Error(`History request failed: ${response.status}`);
@@ -89,6 +114,7 @@ export async function streamChat({
   conversationId,
   message,
   signal,
+  userId,
   onEvent,
 }: StreamChatOptions) {
   const url = buildUrl(baseUrl, "/api/conversations/stream");
@@ -96,6 +122,7 @@ export async function streamChat({
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...(userId ? { "User-Id": userId } : {}),
     },
     body: JSON.stringify({
       conversationId,
@@ -135,4 +162,27 @@ export async function streamChat({
   if (trimmed) {
     onEvent(JSON.parse(trimmed) as StreamEvent);
   }
+}
+
+export async function fetchConversationList(
+  options: FetchConversationListOptions = {},
+) {
+  const url = buildUrl(options.baseUrl, "/api/conversations");
+  const response = await fetch(url, {
+    signal: options.signal,
+    headers: {
+      ...(options.userId ? { "User-Id": options.userId } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Conversation list request failed: ${response.status}`);
+  }
+
+  const data = (await response.json()) as ApiConversationResponse;
+  return data.conversations.map((conversation) => ({
+    id: conversation.id,
+    title: conversation.title,
+    updatedAt: conversation.updatedAt,
+  }));
 }

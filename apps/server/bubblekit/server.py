@@ -5,16 +5,19 @@ import inspect
 import json
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from .runtime import (
+    HistoryContext,
     MessageContext,
+    NewChatContext,
     StreamChannel,
     _new_id,
     _store,
+    get_conversation_list,
     on,
     reset_active_context,
     set_active_context,
@@ -25,6 +28,60 @@ from .runtime import (
 class ChatStreamRequest(BaseModel):
     conversationId: Optional[str] = None
     message: Optional[str] = None
+
+
+def _extract_user_id(user_id: Optional[str]) -> str:
+    if user_id is None or not isinstance(user_id, str):
+        return "anonymous"
+    normalized = user_id.strip()
+    return normalized or "anonymous"
+
+
+def _call_history_handler(handler, conversation_id: str, user_id: str):
+    params = [
+        p
+        for p in inspect.signature(handler).parameters.values()
+        if p.kind
+        in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        )
+    ]
+
+    if len(params) >= 2:
+        return handler(conversation_id, user_id)
+
+    if len(params) == 1:
+        param = params[0]
+        annotation = param.annotation
+        is_history_ctx = annotation is HistoryContext or getattr(annotation, "__name__", None) == "HistoryContext" or annotation == "HistoryContext"
+        if is_history_ctx or param.name in {"ctx", "context"}:
+            ctx = HistoryContext(conversation_id=conversation_id, user_id=user_id)
+            return handler(ctx)
+
+    return handler(conversation_id)
+
+
+def _call_new_chat_handler(handler, conversation_id: str, user_id: str):
+    params = [
+        p
+        for p in inspect.signature(handler).parameters.values()
+        if p.kind
+        in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        )
+    ]
+
+    if len(params) == 1:
+        param = params[0]
+        annotation = param.annotation
+        is_ctx = annotation is NewChatContext or getattr(annotation, "__name__", None) == "NewChatContext" or annotation == "NewChatContext"
+        if is_ctx or param.name in {"ctx", "context"}:
+            ctx = NewChatContext(conversation_id=conversation_id, user_id=user_id)
+            return handler(ctx)
+
+    return handler(conversation_id)
 
 
 def create_app(
@@ -46,8 +103,19 @@ def create_app(
         allow_headers=["*"],
     )
 
+    @app.get("/api/conversations")
+    async def get_conversations(
+        user_id_header: Optional[str] = Header(default=None, alias="User-Id"),
+    ):
+        user_id = _extract_user_id(user_id_header)
+        return {"conversations": get_conversation_list(user_id)}
+
     @app.get("/api/conversations/{conversation_id}/messages")
-    async def get_messages(conversation_id: str):
+    async def get_messages(
+        conversation_id: str,
+        user_id_header: Optional[str] = Header(default=None, alias="User-Id"),
+    ):
+        user_id = _extract_user_id(user_id_header)
         session = _store.get_or_create(conversation_id)
         token = set_active_context(session, stream=None)
         try:
@@ -55,7 +123,7 @@ def create_app(
             if handler is None:
                 return {"conversationId": conversation_id, "messages": []}
 
-            result = handler(conversation_id)
+            result = _call_history_handler(handler, conversation_id, user_id)
             if inspect.isawaitable(result):
                 result = await result
 
@@ -65,7 +133,11 @@ def create_app(
             reset_active_context(token)
 
     @app.post("/api/conversations/stream")
-    async def stream_chat(payload: ChatStreamRequest):
+    async def stream_chat(
+        payload: ChatStreamRequest,
+        user_id_header: Optional[str] = Header(default=None, alias="User-Id"),
+    ):
+        user_id = _extract_user_id(user_id_header)
         conversation_id = payload.conversationId or _new_id()
         session = _store.get_or_create(conversation_id)
         queue: asyncio.Queue = asyncio.Queue()
@@ -75,7 +147,7 @@ def create_app(
         async def run_handler() -> None:
             try:
                 if payload.conversationId is None and on.new_chat_handler is not None:
-                    result = on.new_chat_handler(conversation_id)
+                    result = _call_new_chat_handler(on.new_chat_handler, conversation_id, user_id)
                     if inspect.isawaitable(result):
                         await result
 
@@ -91,6 +163,7 @@ def create_app(
                 ctx = MessageContext(
                     conversation_id=conversation_id,
                     message=message_text,
+                    user_id=user_id,
                 )
                 result = on.message_handler(ctx)
                 if inspect.isawaitable(result):
