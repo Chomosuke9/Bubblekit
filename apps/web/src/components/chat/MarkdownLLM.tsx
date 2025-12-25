@@ -16,7 +16,7 @@ import remarkMath from "remark-math";
 import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
-import type { Pluggable, PluggableList } from "unified";
+import type {PluggableList } from "unified";
 import mermaid from "mermaid";
 import "katex/dist/katex.min.css";
 
@@ -236,12 +236,13 @@ export const MarkdownLLM = memo(function MarkdownLLM({
   safe_mode = false,
 }: MarkdownLLMProps) {
   const normalized = useMemo(() => unwrapOuterMarkdownFence(markdown), [markdown]);
-  const highlightPlugin = [rehypeHighlight, { ignoreMissing: true }] as unknown;
   const rehypePlugins = useMemo<PluggableList>(
-    () =>
-      safe_mode
-        ? [rehypeKatex, highlightPlugin as any]
-        : [rehypeRaw, rehypeKatex, highlightPlugin as any],
+    () => {
+      const highlightPlugin: [typeof rehypeHighlight, { ignoreMissing: boolean }] = [rehypeHighlight, { ignoreMissing: true }];
+      return safe_mode
+        ? [rehypeKatex, highlightPlugin]
+        : [rehypeRaw, rehypeKatex, highlightPlugin];
+    },
     [safe_mode],
   );
 

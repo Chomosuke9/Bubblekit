@@ -46,12 +46,12 @@ class ServerStreamTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_stream_emits_meta_and_handlers(self):
         def new_chat_handler(conversation_id):
-            greeting = bubble(role="assistant", type="text")
+            greeting = bubble(role="assistant", type="text").send()
             greeting.set("Hello")
             greeting.done()
 
         def message_handler(ctx):
-            reply = bubble(role="assistant", type="text")
+            reply = bubble(role="assistant", type="text").send()
             reply.set(f"Echo: {ctx.message}")
             reply.done()
 
@@ -80,7 +80,7 @@ class ServerStreamTests(unittest.IsolatedAsyncioTestCase):
             called["new_chat"] = True
 
         def message_handler(ctx):
-            reply = bubble(role="assistant", type="text")
+            reply = bubble(role="assistant", type="text").send()
             reply.set("Hi")
             reply.done()
 
@@ -141,6 +141,35 @@ class ServerStreamTests(unittest.IsolatedAsyncioTestCase):
         await route.endpoint(conversation_id="abc", user_id_header=None)
 
         self.assertEqual(received.get("args"), ("abc", "anonymous"))
+
+    async def test_history_handler_accepts_bubble_templates(self):
+        def history_handler(conversation_id):
+            draft = bubble(role="assistant", type="text")
+            draft.set("Saved")
+            return [draft]
+
+        on.history_handler = history_handler
+
+        route = _get_route(self.app, "/api/conversations/{conversation_id}/messages", "GET")
+        payload = await route.endpoint(conversation_id="abc", user_id_header="user-123")
+
+        messages = payload.get("messages", [])
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]["role"], "assistant")
+        self.assertEqual(messages[0]["content"], "Saved")
+
+    async def test_history_handler_returns_sent_bubbles_when_none(self):
+        def history_handler(conversation_id):
+            bubble(role="assistant", type="text").set("From send").send()
+
+        on.history_handler = history_handler
+
+        route = _get_route(self.app, "/api/conversations/{conversation_id}/messages", "GET")
+        payload = await route.endpoint(conversation_id="abc", user_id_header="user-123")
+
+        messages = payload.get("messages", [])
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]["content"], "From send")
 
     async def test_new_chat_handler_receives_user_id_context(self):
         received = {}

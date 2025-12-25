@@ -1,3 +1,10 @@
+Metadata-Version: 2.4
+Name: bubblekit
+Version: 0.1.0
+Summary: My bubble utilities
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+
 # Bubblekit
 
 Bubblekit is a lightweight LLM chat UI + backend starter. The repo is structured as a small monorepo so you can swap the LLM logic while keeping a ready-made frontend.

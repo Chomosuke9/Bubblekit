@@ -1,5 +1,5 @@
-import type { CSSProperties, JSX } from "react";
-import { Bot, User } from "lucide-react";
+import { type CSSProperties, type JSX, useState } from "react";
+import { Bot, ChevronDown, ChevronRight, User } from "lucide-react";
 import type { BubbleConfig, BubbleColors } from "../../types/Message";
 import type { MessageBubbleProps } from "../../types/ui";
 import MarkdownLLM from "./MarkdownLLM";
@@ -25,6 +25,18 @@ function normalizeIcon(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeMaxHeight(value: unknown): string | number | null {
+  if (value == null) return null;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  return null;
 }
 
 function getDefaultName(role: string) {
@@ -54,12 +66,23 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
   const showIcon = hasIcon ? iconUrl !== null : true;
   const showName = name !== null;
   const showHeader = showIcon || showName;
+  const isTool = message.type === "tool";
+  const isCollapsible = config?.collapsible === true;
+  const collapsibleTitle =
+    isCollapsible
+      ? normalizeLabel(config?.collapsible_title) ?? (isTool ? "Tool Output" : null)
+      : null;
+  const collapsibleMaxHeight = isCollapsible
+    ? normalizeMaxHeight(config?.collapsible_max_height)
+    : null;
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const colors = getColors(config);
   const bubbleColors = colors.bubble;
   const headerColors = colors.header;
   const bubbleStyle: CSSProperties = {};
   const headerStyle: CSSProperties = {};
   const iconStyle: CSSProperties = {};
+  const contentStyle: CSSProperties = {};
   const DefaultIcon = isUser ? User : Bot;
 
   if (bubbleColors?.bg) bubbleStyle.backgroundColor = bubbleColors.bg;
@@ -75,6 +98,14 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
 
   const headerHasSurface = Boolean(headerColors?.bg || headerColors?.border);
   const headerHasBorder = Boolean(headerColors?.border);
+  const toolClass = isTool
+    ? "border-dashed border-neutral-300/70 bg-neutral-50/80 text-neutral-700 dark:border-neutral-700/70 dark:bg-neutral-900/50 dark:text-neutral-200"
+    : "";
+
+  if (isCollapsible && collapsibleMaxHeight != null) {
+    contentStyle.maxHeight = collapsibleMaxHeight;
+    contentStyle.overflowY = "auto";
+  }
 
   return (
     <div
@@ -120,17 +151,51 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
         )}
         {/* Bubble body */}
         <div
-          className={
+          className={[
             isUser
-              ? "px-3 py-2 rounded-lg border border-transparent bg-neutral-200 text-sm text-neutral-900 dark:bg-neutral-700 dark:text-neutral-100 break-words"
-              : "px-3 py-2 rounded-lg border border-transparent bg-neutral-100 text-sm text-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 break-words"
-          }
+              ? "px-3 py-2 rounded-lg border border-transparent bg-neutral-200 text-sm text-neutral-900 dark:bg-neutral-700 dark:text-neutral-100 wrap-break-words"
+              : "px-3 py-2 rounded-lg border border-transparent bg-neutral-100 text-sm text-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 wrap-break-words",
+            toolClass,
+          ]
+            .filter(Boolean)
+            .join(" ")}
           style={bubbleStyle}
         >
-          {/* Markdown content */}
-          <MarkdownLLM
-            markdown={typeof message.content === "string" ? message.content : String(message.content ?? "")}
-          />
+          {isCollapsible && (
+            <button
+              type="button"
+              className="mb-2 flex w-full items-center justify-between gap-2 text-xs font-medium text-neutral-500 dark:text-neutral-400"
+              aria-expanded={!isCollapsed}
+              aria-label="Toggle bubble content"
+              onClick={() => setIsCollapsed((prev) => !prev)}
+            >
+              <span className="flex items-center gap-1">
+                {isCollapsed ? (
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                )}
+                {collapsibleTitle && <span>{collapsibleTitle}</span>}
+              </span>
+              <span className="text-[11px] uppercase tracking-wide">
+                {isCollapsed ? "Expand" : "Collapse"}
+              </span>
+            </button>
+          )}
+          {(!isCollapsible || !isCollapsed) && (
+            <div
+              className={collapsibleMaxHeight ? "overflow-y-auto" : undefined}
+              style={contentStyle}
+            >
+              <MarkdownLLM
+                markdown={
+                  typeof message.content === "string"
+                    ? message.content
+                    : String(message.content ?? "")
+                }
+              />
+            </div>
+          )}
 
         </div>
       </div>

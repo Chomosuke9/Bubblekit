@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
-from typing import Optional
+from typing import Optional, Sequence
 
 from fastapi import FastAPI, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +15,7 @@ from .runtime import (
     MessageContext,
     NewChatContext,
     StreamChannel,
+    Bubble,
     _new_id,
     _store,
     get_conversation_list,
@@ -87,6 +88,34 @@ def _call_new_chat_handler(handler, conversation_id: str, user_id: str):
     return handler(conversation_id)
 
 
+def _normalize_history_messages(messages):
+    if messages is None:
+        return []
+    if not isinstance(messages, Sequence) or isinstance(messages, (str, bytes)):
+        raise TypeError("History handler must return a list of dicts or Bubble objects.")
+
+    normalized = []
+    for item in messages:
+        if isinstance(item, Bubble):
+            normalized.append(
+                {
+                    "id": item.id,
+                    "role": item.role,
+                    "content": item.chat,
+                    "type": item.type,
+                    "config": item.config_data,
+                    "createdAt": item._state.created_at,
+                }
+            )
+            continue
+        if isinstance(item, dict):
+            normalized.append(dict(item))
+            continue
+        raise TypeError("History items must be dicts or Bubble objects.")
+
+    return normalized
+
+
 def create_app(
     *,
     allow_origins: Optional[list[str]] = None,
@@ -130,7 +159,11 @@ def create_app(
             if inspect.isawaitable(result):
                 result = await result
 
-            messages = result or []
+            if result is None:
+                messages = session.export_messages()
+                return {"conversationId": conversation_id, "messages": messages}
+
+            messages = _normalize_history_messages(result)
             return {"conversationId": conversation_id, "messages": messages}
         finally:
             reset_active_context(token)

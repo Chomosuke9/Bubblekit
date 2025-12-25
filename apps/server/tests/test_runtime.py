@@ -8,7 +8,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from bubblekit import access_bubble, bubble, load
+from bubblekit import access_bubble, bubble, clear_conversation, create_history
 from bubblekit.runtime import (
     BubbleSession,
     StreamChannel,
@@ -39,7 +39,7 @@ class RuntimeStreamTests(unittest.IsolatedAsyncioTestCase):
             icon="/icons/support.svg",
             bubble_bg_color="#111111",
             header_text_color="#222222",
-        )
+        ).send()
         event = await self.queue.get()
 
         self.assertEqual(event["type"], "config")
@@ -55,7 +55,7 @@ class RuntimeStreamTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply.config_data["name"], "Support")
 
     async def test_bubble_stream_updates_state_and_emits_delta(self):
-        reply = bubble(id="b2")
+        reply = bubble(id="b2").send()
         await self.queue.get()
 
         reply.stream("Hi")
@@ -71,7 +71,7 @@ class RuntimeStreamTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply.chat, "Hi!")
 
     async def test_bubble_set_replaces_content_and_emits_set(self):
-        reply = bubble(id="b3")
+        reply = bubble(id="b3").send()
         await self.queue.get()
 
         reply.set("Hello")
@@ -82,7 +82,7 @@ class RuntimeStreamTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply.chat, "Hello")
 
     async def test_bubble_done_emits_once(self):
-        reply = bubble(id="b4")
+        reply = bubble(id="b4").send()
         await self.queue.get()
 
         reply.done()
@@ -92,12 +92,24 @@ class RuntimeStreamTests(unittest.IsolatedAsyncioTestCase):
         reply.done()
         self.assertTrue(self.queue.empty())
 
+    async def test_send_emits_prefilled_content(self):
+        draft = bubble(id="b4-prefill")
+        draft.set("Prefilled")
+
+        reply = draft.send()
+        event1 = await self.queue.get()
+        event2 = await self.queue.get()
+
+        self.assertEqual(event1["type"], "config")
+        self.assertEqual(event2["type"], "set")
+        self.assertEqual(event2["content"], "Prefilled")
+
     async def test_bubble_config_merges_colors(self):
         reply = bubble(
             id="b5",
             bubble_bg_color="#111111",
             header_text_color="#222222",
-        )
+        ).send()
         await self.queue.get()
 
         reply.config(bubble_text_color="#eeeeee")
@@ -112,7 +124,7 @@ class RuntimeStreamTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(colors["header"]["text"], "#222222")
 
     async def test_access_bubble_returns_existing(self):
-        reply = bubble(id="b6")
+        reply = bubble(id="b6").send()
         await self.queue.get()
 
         reply.stream("Test")
@@ -123,7 +135,7 @@ class RuntimeStreamTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(accessed.chat, "Test")
 
     async def test_finalize_pending_emits_done(self):
-        reply = bubble(id="b7")
+        reply = bubble(id="b7").send()
         await self.queue.get()
 
         pending = self.session.finalize_pending()
@@ -142,24 +154,42 @@ class RuntimeValidationTests(unittest.TestCase):
     def tearDown(self):
         reset_active_context(self.token)
 
-    def test_load_context_builds_messages(self):
-        messages = load(
-            [
-                {
-                    "id": "m1",
-                    "role": "assistant",
-                    "type": "text",
-                    "content": "Hi",
-                    "config": {"name": "Bot"},
-                    "createdAt": "now",
-                }
-            ]
-        )
+    def test_create_history_normalizes_conversation(self):
+        history = create_history(id="c1", title="Hello", updatedAt=123)
 
-        self.assertEqual(len(messages), 1)
-        self.assertEqual(messages[0]["id"], "m1")
-        self.assertEqual(messages[0]["content"], "Hi")
-        self.assertEqual(messages[0]["config"]["name"], "Bot")
+        self.assertEqual(history["id"], "c1")
+        self.assertEqual(history["title"], "Hello")
+        self.assertEqual(history["updatedAt"], 123)
+
+    def test_clear_conversation_clears_active_session(self):
+        bubble(role="assistant", type="text").set("Hi").send()
+        self.assertEqual(len(self.session.export_messages()), 1)
+
+        clear_conversation()
+        self.assertEqual(len(self.session.export_messages()), 0)
+
+    def test_send_allowed_without_stream(self):
+        draft = bubble(role="assistant", type="text")
+        draft.set("prefill")
+
+        sent = draft.send()
+
+        self.assertEqual(sent.chat, "prefill")
+
+        # Should not raise when updating without stream
+        sent.stream(" more")
+        sent.done()
+
+        self.assertEqual(sent.chat, "prefill more")
+
+    def test_bubble_to_openai_returns_role_and_content(self):
+        reply = bubble(role="user")
+        reply.set("Hello")
+
+        self.assertEqual(
+            reply.to_openai(),
+            {"role": "user", "content": "Hello"},
+        )
 
     def test_warn_if_not_done_emits_warning(self):
         with warnings.catch_warnings(record=True) as captured:
@@ -192,14 +222,12 @@ class RuntimeExtraValidationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_extra_validation_rejects_config(self):
         reply = bubble(id="b8")
-        await self.queue.get()
 
         with self.assertRaises(ValueError):
             reply.config(extra={"config": {}})
 
     async def test_extra_validation_rejects_colors(self):
         reply = bubble(id="b9")
-        await self.queue.get()
 
         with self.assertRaises(ValueError):
             reply.config(extra={"colors": {}})

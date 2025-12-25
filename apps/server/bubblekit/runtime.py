@@ -5,7 +5,7 @@ import contextvars
 import uuid
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional, Sequence, overload
+from typing import Any, Dict, List, Optional, Sequence, overload
 
 
 def _new_id() -> str:
@@ -51,6 +51,9 @@ def _build_config_patch(
     header_border_color: Any = _COLOR_AUTO,
     header_icon_bg_color: Any = _COLOR_AUTO,
     header_icon_text_color: Any = _COLOR_AUTO,
+    collapsible: Any = _UNSET,
+    collapsible_title: Any = _UNSET,
+    collapsible_max_height: Any = _UNSET,
     extra: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     patch: Dict[str, Any] = {}
@@ -59,6 +62,12 @@ def _build_config_patch(
         patch["name"] = name
     if icon is not _UNSET:
         patch["icon"] = icon
+    if collapsible is not _UNSET:
+        patch["collapsible"] = collapsible
+    if collapsible_title is not _UNSET:
+        patch["collapsible_title"] = collapsible_title
+    if collapsible_max_height is not _UNSET:
+        patch["collapsible_max_height"] = collapsible_max_height
 
     colors: Dict[str, Any] = {}
     bubble: Dict[str, Any] = {}
@@ -123,6 +132,17 @@ class BubbleState:
     done: bool = False
 
 
+def _state_to_message(state: BubbleState) -> Dict[str, Any]:
+    return {
+        "id": state.id,
+        "role": state.role,
+        "content": state.content,
+        "type": state.type,
+        "config": dict(state.config),
+        "createdAt": state.created_at,
+    }
+
+
 class StreamChannel:
     def __init__(self, queue: asyncio.Queue, loop: asyncio.AbstractEventLoop) -> None:
         self._queue = queue
@@ -166,6 +186,9 @@ class BubbleSession:
             raise RuntimeError("No active stream for this session.")
         self._stream.emit(event)
 
+    def has_stream(self) -> bool:
+        return self._stream is not None
+
     def create_bubble(self, bubble_id: str, role: str, bubble_type: str) -> BubbleState:
         if bubble_id in self._bubbles:
             raise ValueError(f"Bubble id already exists: {bubble_id}")
@@ -199,6 +222,9 @@ class BubbleSession:
             state.done = True
             self.emit({"type": "done", "bubbleId": state.id})
         return [state.id for state in pending]
+
+    def export_messages(self) -> List[Dict[str, Any]]:
+        return [_state_to_message(self._bubbles[bubble_id]) for bubble_id in self._order]
 
 
 class SessionStore:
@@ -340,6 +366,19 @@ def get_conversation_list(user_id: Optional[str]) -> List[Dict[str, Any]]:
     return [dict(item) for item in stored]
 
 
+def clear_conversation(
+    conversation_id: Optional[str] = None, user_id: Optional[str] = None
+) -> None:
+    if conversation_id is None:
+        ctx = _get_active_context(require_stream=False)
+        ctx.session.clear()
+        return
+
+    _ = user_id
+    session = _store.get_or_create(str(conversation_id))
+    session.clear()
+
+
 def _get_active_context(require_stream: bool) -> SessionContext:
     ctx = _active_context.get()
     if ctx is None:
@@ -349,10 +388,46 @@ def _get_active_context(require_stream: bool) -> SessionContext:
     return ctx
 
 
+def _emit_if_stream(session: BubbleSession, event: Dict[str, Any]) -> None:
+    if session.has_stream():
+        session.emit(event)
+
+
+def create_history(*, id: Any, title: Any, updatedAt: Any, **extra: Any) -> Dict[str, Any]:
+    conv_id = str(id)
+    if not conv_id:
+        raise ValueError("create_history: id cannot be empty.")
+    if title is None or not isinstance(title, str):
+        raise TypeError("create_history: title must be a string.")
+    normalized_title = title.strip()
+    if not normalized_title:
+        raise ValueError("create_history: title cannot be empty.")
+    if not isinstance(updatedAt, int) or isinstance(updatedAt, bool):
+        raise TypeError("create_history: updatedAt must be an integer (unix ms).")
+
+    payload: Dict[str, Any] = {
+        "id": conv_id,
+        "title": normalized_title,
+        "updatedAt": updatedAt,
+    }
+    for key, value in extra.items():
+        if key in payload:
+            continue
+        payload[key] = value
+    return payload
+
+
 class Bubble:
-    def __init__(self, state: BubbleState, session: BubbleSession) -> None:
+    def __init__(
+        self,
+        state: BubbleState,
+        session: Optional[BubbleSession] = None,
+        *,
+        id_fixed: bool = True,
+    ) -> None:
         self._state = state
         self._session = session
+        self._id_fixed = id_fixed
 
     @property
     def id(self) -> str:
@@ -374,15 +449,19 @@ class Bubble:
     def config_data(self) -> Dict[str, Any]:
         return dict(self._state.config)
 
-    def set(self, text: str) -> None:
+    def set(self, text: str) -> Bubble:
         content = "" if text is None else str(text)
         self._state.content = content
-        self._session.emit({"type": "set", "bubbleId": self.id, "content": content})
+        if self._session is not None and self._session.has_stream():
+            self._session.emit({"type": "set", "bubbleId": self.id, "content": content})
+        return self
 
-    def stream(self, text: str) -> None:
+    def stream(self, text: str) -> Bubble:
         chunk = "" if text is None else str(text)
         self._state.content += chunk
-        self._session.emit({"type": "delta", "bubbleId": self.id, "content": chunk})
+        if self._session is not None and self._session.has_stream():
+            self._session.emit({"type": "delta", "bubbleId": self.id, "content": chunk})
+        return self
 
     @overload
     def config(
@@ -400,6 +479,9 @@ class Bubble:
         header_border_color: ColorValue = "auto",
         header_icon_bg_color: ColorValue = "auto",
         header_icon_text_color: ColorValue = "auto",
+        collapsible: Optional[bool] = ...,
+        collapsible_title: Optional[str] = ...,
+        collapsible_max_height: Optional[Any] = ...,
         extra: Optional[Dict[str, Any]] = ...,
     ) -> None: ...
 
@@ -418,6 +500,9 @@ class Bubble:
         header_border_color: Any = _COLOR_AUTO,
         header_icon_bg_color: Any = _COLOR_AUTO,
         header_icon_text_color: Any = _COLOR_AUTO,
+        collapsible: Any = _UNSET,
+        collapsible_title: Any = _UNSET,
+        collapsible_max_height: Any = _UNSET,
         extra: Optional[Dict[str, Any]] = None,
     ) -> None:
         extra = _validate_extra_config_fields(extra, "bubble.config()")
@@ -440,16 +525,51 @@ class Bubble:
                 header_border_color=header_border_color,
                 header_icon_bg_color=header_icon_bg_color,
                 header_icon_text_color=header_icon_text_color,
+                collapsible=collapsible,
+                collapsible_title=collapsible_title,
+                collapsible_max_height=collapsible_max_height,
                 extra=extra,
             )
         )
-        self._apply_config(patch, emit=True)
+        self._apply_config(patch, emit=self._session is not None)
 
-    def done(self) -> None:
+    def done(self) -> Bubble:
         if self._state.done:
-            return
+            return self
         self._state.done = True
-        self._session.emit({"type": "done", "bubbleId": self.id})
+        if self._session is not None and self._session.has_stream():
+            self._session.emit({"type": "done", "bubbleId": self.id})
+        return self
+
+    def send(self) -> Bubble:
+        if self._session is not None:
+            raise RuntimeError("Bubble already sent.")
+
+        ctx = _get_active_context(require_stream=False)
+        has_stream = ctx.session.has_stream()
+        bubble_id = self._state.id if self._id_fixed else _new_id()
+        state = ctx.session.create_bubble(
+            bubble_id, role=self._state.role, bubble_type=self._state.type
+        )
+        state.created_at = self._state.created_at
+        if not has_stream:
+            state.done = True
+
+        instance = Bubble(state, ctx.session, id_fixed=True)
+        init_patch = {"role": self._state.role, "type": self._state.type}
+        if self._state.config:
+            init_patch.update(dict(self._state.config))
+        instance._apply_config(init_patch, emit=has_stream)
+
+        if self._state.content:
+            instance.set(self._state.content)
+        if self._state.done and has_stream:
+            instance.done()
+
+        return instance
+
+    def to_openai(self) -> Dict[str, str]:
+        return {"role": self._state.role, "content": self._state.content}
 
     def _apply_config(self, patch: Dict[str, Any], emit: bool) -> None:
         if not patch:
@@ -478,7 +598,7 @@ class Bubble:
             self._state.config.update(patch_copy)
             event_patch.update(incoming_patch)
 
-        if emit and event_patch:
+        if emit and event_patch and self._session is not None and self._session.has_stream():
             self._session.emit(
                 {"type": "config", "bubbleId": self.id, "patch": event_patch}
             )
@@ -500,6 +620,9 @@ def bubble(
     header_border_color: ColorValue = "auto",
     header_icon_bg_color: ColorValue = "auto",
     header_icon_text_color: ColorValue = "auto",
+    collapsible: Optional[bool] = ...,
+    collapsible_title: Optional[str] = ...,
+    collapsible_max_height: Optional[Any] = ...,
     extra: Optional[Dict[str, Any]] = ...,
 ) -> Bubble: ...
 
@@ -519,18 +642,18 @@ def bubble(
     header_border_color: Any = _COLOR_AUTO,
     header_icon_bg_color: Any = _COLOR_AUTO,
     header_icon_text_color: Any = _COLOR_AUTO,
+    collapsible: Any = _UNSET,
+    collapsible_title: Any = _UNSET,
+    collapsible_max_height: Any = _UNSET,
     extra: Optional[Dict[str, Any]] = None,
 ) -> Bubble:
     extra = _validate_extra_config_fields(extra, "bubble()")
 
-    ctx = _get_active_context(require_stream=True)
-    bubble_id = id or _new_id()
+    bubble_id = str(id) if id is not None else _new_id()
     role_value = "assistant" if role is None else str(role)
     type_value = "text" if type is None else str(type)
-    state = ctx.session.create_bubble(
-        bubble_id, role=role_value, bubble_type=type_value
-    )
-    instance = Bubble(state, ctx.session)
+    state = BubbleState(id=bubble_id, role=role_value, type=type_value)
+    instance = Bubble(state, session=None, id_fixed=id is not None)
 
     init_patch = {"role": role_value, "type": type_value}
     init_patch.update(
@@ -545,62 +668,20 @@ def bubble(
             header_border_color=header_border_color,
             header_icon_bg_color=header_icon_bg_color,
             header_icon_text_color=header_icon_text_color,
+            collapsible=collapsible,
+            collapsible_title=collapsible_title,
+            collapsible_max_height=collapsible_max_height,
             extra=extra,
         )
     )
-    instance._apply_config(init_patch, emit=True)
+    instance._apply_config(init_patch, emit=False)
     return instance
 
 
 def access_bubble(bubble_id: str) -> Bubble:
     ctx = _get_active_context(require_stream=True)
     state = ctx.session.get_bubble(bubble_id)
-    return Bubble(state, ctx.session)
-
-
-def load(context: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    ctx = _get_active_context(require_stream=False)
-    ctx.session.clear()
-
-    messages: List[Dict[str, Any]] = []
-    for item in context:
-        if not isinstance(item, dict):
-            raise ValueError("Each context item must be a dict.")
-
-        bubble_id = str(item.get("id") or _new_id())
-        role_value = item.get("role")
-        type_value = item.get("type")
-        content_value = item.get("content")
-
-        role = str(role_value) if role_value is not None else "assistant"
-        bubble_type = str(type_value) if type_value is not None else "text"
-        content = "" if content_value is None else str(content_value)
-        config = dict(item.get("config") or {})
-        created_at = item.get("createdAt")
-
-        state = BubbleState(
-            id=bubble_id,
-            role=role,
-            type=bubble_type,
-            content=content,
-            config=config,
-            created_at=created_at,
-            done=True,
-        )
-        ctx.session.add_bubble_state(state)
-
-        messages.append(
-            {
-                "id": bubble_id,
-                "role": role,
-                "content": content,
-                "type": bubble_type,
-                "config": config,
-                "createdAt": created_at,
-            }
-        )
-
-    return messages
+    return Bubble(state, ctx.session, id_fixed=True)
 
 
 def warn_if_not_done(bubble_ids: List[str]) -> None:
