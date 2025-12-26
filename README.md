@@ -55,7 +55,7 @@ app = create_app(allow_origins=["http://localhost:5173"])
 
 ### on.message
 Registers a handler for incoming messages. The handler receives `ctx` with
-`conversation_id` and `message`.
+`conversation_id`, `user_id`, and `message`.
 
 ```py
 from bubblekit import on, bubble
