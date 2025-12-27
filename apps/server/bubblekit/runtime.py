@@ -5,7 +5,15 @@ import contextvars
 import uuid
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, overload
+from typing import Any, Dict, List, Optional, Sequence, TypedDict, NotRequired, cast
+
+class BubblePayload(TypedDict, total=False):
+    id: NotRequired[str | int | None]
+    role: NotRequired[str | None]
+    type: NotRequired[str | None]
+    content: NotRequired[str | None]
+    config: NotRequired[dict[str, Any] | None]
+    createdAt: NotRequired[str | None]
 
 
 def _new_id() -> str:
@@ -141,6 +149,21 @@ def _state_to_message(state: BubbleState) -> Dict[str, Any]:
         "config": dict(state.config),
         "createdAt": state.created_at,
     }
+
+
+def json_bubble_to_openai(message: Any) -> Dict[str, str]:
+    if not isinstance(message, dict):
+        raise TypeError("json_bubble_to_openai: message must be a dict.")
+
+    raw_role = message.get("role")
+    role_value = "assistant" if raw_role is None else str(raw_role).strip()
+    if not role_value:
+        role_value = "assistant"
+
+    raw_content = message.get("content")
+    content_value = "" if raw_content is None else str(raw_content)
+
+    return {"role": role_value, "content": content_value}
 
 
 class StreamChannel:
@@ -463,27 +486,7 @@ class Bubble:
             self._session.emit({"type": "delta", "bubbleId": self.id, "content": chunk})
         return self
 
-    @overload
-    def config(
-        self,
-        *,
-        role: Optional[str] = ...,
-        type: Optional[str] = ...,
-        name: Optional[str] = ...,
-        icon: Optional[str] = ...,
-        bubble_bg_color: ColorValue = "auto",
-        bubble_text_color: ColorValue = "auto",
-        bubble_border_color: ColorValue = "auto",
-        header_bg_color: ColorValue = "auto",
-        header_text_color: ColorValue = "auto",
-        header_border_color: ColorValue = "auto",
-        header_icon_bg_color: ColorValue = "auto",
-        header_icon_text_color: ColorValue = "auto",
-        collapsible: Optional[bool] = ...,
-        collapsible_title: Optional[str] = ...,
-        collapsible_max_height: Optional[Any] = ...,
-        extra: Optional[Dict[str, Any]] = ...,
-    ) -> None: ...
+
 
     def config(
         self,
@@ -571,6 +574,52 @@ class Bubble:
     def to_openai(self) -> Dict[str, str]:
         return {"role": self._state.role, "content": self._state.content}
 
+    def to_json_bubble(self) -> Dict[str, Any]:
+        return _state_to_message(self._state)
+
+    @classmethod
+    def from_json_bubble(cls, payload: Any) -> Bubble:
+        if not isinstance(payload, dict):
+            raise TypeError("Bubble.from_json_bubble: payload must be a dict.")
+
+        payload_t = cast(BubblePayload, payload)
+
+        raw_id = payload_t.get("id")
+        bubble_id = _new_id() if raw_id is None or not str(raw_id).strip() else str(raw_id)
+
+        raw_role = payload_t.get("role")
+        role_value = "assistant" if raw_role is None else str(raw_role).strip()
+        if not role_value:
+            role_value = "assistant"
+
+        raw_type = payload_t.get("type")
+        type_value = "text" if raw_type is None else str(raw_type).strip()
+        if not type_value:
+            type_value = "text"
+
+        raw_content = payload_t.get("content")
+        content_value = "" if raw_content is None else str(raw_content)
+
+        config_value: dict[str, Any] = {}
+        raw_config = payload_t.get("config")
+        if isinstance(raw_config, dict):
+            config_value = dict(raw_config)
+            config_value.pop("role", None)
+            config_value.pop("type", None)
+
+        raw_created_at = payload_t.get("createdAt")
+        created_at_value = None if raw_created_at is None else str(raw_created_at)
+
+        state = BubbleState(
+            id=bubble_id,
+            role=role_value,
+            type=type_value,
+            content=content_value,
+            config=config_value,
+            created_at=created_at_value,
+        )
+        return cls(state, session=None, id_fixed=True)
+
     def _apply_config(self, patch: Dict[str, Any], emit: bool) -> None:
         if not patch:
             return
@@ -604,27 +653,6 @@ class Bubble:
             )
 
 
-@overload
-def bubble(
-    *,
-    id: Optional[str] = None,
-    role: str = "assistant",
-    type: str = "text",
-    name: Optional[str] = ...,
-    icon: Optional[str] = ...,
-    bubble_bg_color: ColorValue = "auto",
-    bubble_text_color: ColorValue = "auto",
-    bubble_border_color: ColorValue = "auto",
-    header_bg_color: ColorValue = "auto",
-    header_text_color: ColorValue = "auto",
-    header_border_color: ColorValue = "auto",
-    header_icon_bg_color: ColorValue = "auto",
-    header_icon_text_color: ColorValue = "auto",
-    collapsible: Optional[bool] = ...,
-    collapsible_title: Optional[str] = ...,
-    collapsible_max_height: Optional[Any] = ...,
-    extra: Optional[Dict[str, Any]] = ...,
-) -> Bubble: ...
 
 
 def bubble(

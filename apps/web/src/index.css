@@ -308,6 +308,29 @@
   text-transform: lowercase;
 }
 
+
+.markdown-code-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.markdown-code-toggle {
+  border-radius: 0.4rem;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted-foreground);
+  padding: 0.2em 0.5em;
+  font-size: 0.85em;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+  cursor: pointer;
+}
+
+.markdown-code-toggle:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: transparent;
+}
 .markdown-code-lang {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
@@ -338,6 +361,12 @@
 .markdown-code-pre {
   margin: 0;
   padding: 0.75em 0.9em;
+  max-height: 22rem;
+  overflow: auto;
+}
+
+.markdown-code-pre.is-expanded {
+  max-height: 70vh;
 }
 
 .markdown-code-pre code.hljs {
@@ -451,6 +480,12 @@
   max-width: 100%;
   height: auto;
   border-radius: 0.5rem;
+}
+
+.markdown-llm .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
 }
 
 .markdown-llm input[type="checkbox"] {

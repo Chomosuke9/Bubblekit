@@ -8,8 +8,9 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from bubblekit import access_bubble, bubble, clear_conversation, create_history
+from bubblekit import access_bubble, bubble, clear_conversation, create_history, json_bubble_to_openai
 from bubblekit.runtime import (
+    Bubble,
     BubbleSession,
     StreamChannel,
     reset_active_context,
@@ -189,6 +190,41 @@ class RuntimeValidationTests(unittest.TestCase):
         self.assertEqual(
             reply.to_openai(),
             {"role": "user", "content": "Hello"},
+        )
+
+    def test_bubble_json_roundtrip(self):
+        draft = bubble(id="jb1", role="assistant", type="text", name="Support")
+        draft.set("Saved")
+        payload = draft.to_json_bubble()
+
+        restored = Bubble.from_json_bubble(payload)
+        self.assertEqual(restored.to_json_bubble(), payload)
+
+    def test_bubble_from_json_defaults(self):
+        restored = Bubble.from_json_bubble({})
+        payload = restored.to_json_bubble()
+
+        self.assertEqual(
+            list(payload.keys()),
+            ["id", "role", "content", "type", "config", "createdAt"],
+        )
+        self.assertTrue(isinstance(payload["id"], str))
+        self.assertEqual(len(payload["id"]), 32)
+        self.assertEqual(payload["role"], "assistant")
+        self.assertEqual(payload["type"], "text")
+        self.assertEqual(payload["content"], "")
+        self.assertEqual(payload["config"], {})
+        self.assertIsNone(payload["createdAt"])
+
+    def test_json_bubble_to_openai_defaults(self):
+        self.assertEqual(json_bubble_to_openai({}), {"role": "assistant", "content": ""})
+        self.assertEqual(
+            json_bubble_to_openai({"role": "user"}),
+            {"role": "user", "content": ""},
+        )
+        self.assertEqual(
+            json_bubble_to_openai({"content": "Hi"}),
+            {"role": "assistant", "content": "Hi"},
         )
 
     def test_warn_if_not_done_emits_warning(self):

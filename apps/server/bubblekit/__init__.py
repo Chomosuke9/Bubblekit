@@ -7,6 +7,7 @@ from .runtime import (
     clear_conversation,
     create_history,
     get_conversation_list,
+    json_bubble_to_openai,
     on,
     set_conversation_list,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "create_history",
     "create_app",
     "get_conversation_list",
+    "json_bubble_to_openai",
     "on",
     "set_conversation_list",
 ]

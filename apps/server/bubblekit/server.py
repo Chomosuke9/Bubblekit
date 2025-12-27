@@ -97,16 +97,7 @@ def _normalize_history_messages(messages):
     normalized = []
     for item in messages:
         if isinstance(item, Bubble):
-            normalized.append(
-                {
-                    "id": item.id,
-                    "role": item.role,
-                    "content": item.chat,
-                    "type": item.type,
-                    "config": item.config_data,
-                    "createdAt": item._state.created_at,
-                }
-            )
+            normalized.append(item.to_json_bubble())
             continue
         if isinstance(item, dict):
             normalized.append(dict(item))
@@ -133,6 +124,8 @@ def create_app(
         allow_origins=origins,
         allow_methods=["*"],
         allow_headers=["*"],
+        allow_credentials=True,
+
     )
 
     @app.get("/api/conversations")
