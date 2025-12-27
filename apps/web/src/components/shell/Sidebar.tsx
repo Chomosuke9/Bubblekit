@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -26,6 +26,7 @@ function Sidebar({
 }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [userIdDraft, setUserIdDraft] = useState(userId);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     setUserIdDraft(userId);
@@ -40,6 +41,44 @@ function Sidebar({
     event.preventDefault();
     onChangeUserId(userIdDraft);
   }
+
+  function fuzzyScore(query: string, text: string) {
+    if (!query) return 0;
+
+    const normalizedQuery = query.toLowerCase();
+    const normalizedText = text.toLowerCase();
+
+    let queryIndex = 0;
+    let score = 0;
+    let streak = 0;
+
+    for (let i = 0; i < normalizedText.length && queryIndex < normalizedQuery.length; i += 1) {
+      if (normalizedText[i] === normalizedQuery[queryIndex]) {
+        score += 1 + streak;
+        streak += 1;
+        queryIndex += 1;
+      } else {
+        streak = 0;
+      }
+    }
+
+    return queryIndex === normalizedQuery.length ? score : -1;
+  }
+
+  const filteredConversations = useMemo(() => {
+    const trimmed = searchTerm.trim();
+
+    if (!trimmed) return conversations;
+
+    return conversations
+      .map((conversation) => ({
+        conversation,
+        score: fuzzyScore(trimmed, conversation.title),
+      }))
+      .filter(({ score }) => score >= 0)
+      .sort((a, b) => b.score - a.score)
+      .map(({ conversation }) => conversation);
+  }, [conversations, searchTerm]);
 
   return (
     <>
@@ -61,12 +100,13 @@ function Sidebar({
               isOpen ? "w-full opacity-100" : "w-0 opacity-0",
             ].join(" ")}
           >
-            <InputGroupInput placeholder="Search..." />
+            <InputGroupInput
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
             <InputGroupAddon>
               <SearchIcon />
-            </InputGroupAddon>
-            <InputGroupAddon align="inline-end">
-              <InputGroupButton>Search</InputGroupButton>
             </InputGroupAddon>
           </InputGroup>
 
@@ -129,8 +169,12 @@ function Sidebar({
                     <p className="text-sm text-neutral-500 dark:text-neutral-400">
                       No conversations yet.
                     </p>
+                  ) : filteredConversations.length === 0 ? (
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                      No conversations found.
+                    </p>
                   ) : (
-                    conversations.map((conversation) => {
+                    filteredConversations.map((conversation) => {
                       const isSelected = conversation.id === selectedConversationId;
                       const formattedDate = new Date(conversation.updatedAt).toLocaleString();
 
