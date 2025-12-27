@@ -291,7 +291,10 @@
   border-radius: 0.6rem;
   border: 1px solid var(--border);
   background: var(--muted);
-  overflow: hidden;
+  max-width: 80cap;
+  max-width: min(80cap, calc(100vw - 2rem));
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .markdown-code-header {
@@ -361,13 +364,11 @@
 .markdown-code-pre {
   margin: 0;
   padding: 0.75em 0.9em;
-  max-height: 22rem;
-  overflow: auto;
+  overflow-x: scroll;
+  white-space: pre;
 }
 
-.markdown-code-pre.is-expanded {
-  max-height: 70vh;
-}
+
 
 .markdown-code-pre code.hljs {
   color: var(--code-fg);

@@ -74,52 +74,6 @@ function unwrapOuterMarkdownFence(input: string): string {
   // Keep real code fences (js/python/etc.) as-is.
   return input;
 }
-const LATEX_TOKEN_RE =
-  /\\(?:frac|sqrt|sum|int|prod|lim|log|ln|sin|cos|tan|cot|sec|csc|arcsin|arccos|arctan|cdot|times|div|pm|mp|leq|geq|neq|approx|equiv|to|rightarrow|left|right|begin|end|alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega|Delta|Gamma|Lambda|Omega|Pi|Sigma|Theta|Phi|Psi|mathbb|mathbf|mathrm|mathcal|text|overline|underline|hat|bar|vec|dot|ddot)\b/;
-
-/**
- * QOL: LLMs often emit LaTeX commands without `$...$` delimiters.
- * - Converts \(\) and \[\] delimiters into $ / $$.
- * - Wraps whitespace-separated tokens containing common LaTeX commands with `$...$`.
- * Skips fenced code blocks.
- */
-function normalizeMarkdownMath(input: string): string {
-  if (!input) return "";
-
-  const lines = input.replace(/\r\n/g, "\n").split("\n");
-  let inFence = false;
-
-  const out = lines
-    .map((line) => {
-      if (/^```/.test(line.trim())) {
-        inFence = !inFence;
-        return line;
-      }
-      if (inFence) return line;
-
-      let s = line;
-
-      // Support \( ... \) and \[ ... \] styles.
-      s = s.replace(/\\\[/g, "$$").replace(/\\\]/g, "$$");
-      s = s.replace(/\\\(/g, "$").replace(/\\\)/g, "$");
-
-      // If math delimiters are already present, don't auto-wrap anything on this line.
-      if (s.includes("$")) return s;
-
-      // Wrap tokens that look like LaTeX (e.g. \frac{1}{2}, \sqrt{x}).
-      return s
-        .split(/(\s+)/)
-        .map((part) => {
-          if (!part || /^\s+$/.test(part)) return part;
-          if (LATEX_TOKEN_RE.test(part)) return `$${part}$`;
-          return part;
-        })
-        .join("");
-    })
-    .join("\n");
-
-  return out;
-}
 
 function extractText(value: ReactNode): string {
   if (typeof value === "string" || typeof value === "number") {
@@ -182,9 +136,6 @@ function CodeBlock({ language, code, className, children }: CodeBlockProps) {
   const timeoutRef = useRef<number | null>(null);
   const canCopy = typeof document !== "undefined";
   const label = language ?? "text";
-  const [expanded, setExpanded] = useState(false);
-  const lineCount = useMemo(() => code.split(/\r?\n/).length, [code]);
-  const isLong = lineCount > 24 || code.length > 1600;
 
   useEffect(() => {
     return () => {
@@ -216,30 +167,17 @@ function CodeBlock({ language, code, className, children }: CodeBlockProps) {
     <div className="markdown-code-block">
       <div className="markdown-code-header">
         <span className="markdown-code-lang">{label}</span>
-
-        <div className="markdown-code-actions">
-          {isLong ? (
-            <button
-              type="button"
-              className="markdown-code-toggle"
-              onClick={() => setExpanded((v) => !v)}
-            >
-              {expanded ? "Collapse" : "Expand"}
-            </button>
-          ) : null}
-
-          <button
-            type="button"
-            className="markdown-code-copy"
-            onClick={handleCopy}
-            disabled={!canCopy}
-            aria-live="polite"
-          >
-            {copied ? "Copied" : "Copy code"}
-          </button>
-        </div>
+        <button
+          type="button"
+          className="markdown-code-copy"
+          onClick={handleCopy}
+          disabled={!canCopy}
+          aria-live="polite"
+        >
+          {copied ? "Copied" : "Copy code"}
+        </button>
       </div>
-      <pre className={expanded ? "markdown-code-pre is-expanded" : "markdown-code-pre"}>
+      <pre className="markdown-code-pre">
         <code className={className}>{children}</code>
       </pre>
     </div>
@@ -297,16 +235,13 @@ export const MarkdownLLM = memo(function MarkdownLLM({
   className,
   safe_mode = false,
 }: MarkdownLLMProps) {
-  const normalized = useMemo(
-    () => normalizeMarkdownMath(unwrapOuterMarkdownFence(markdown)),
-    [markdown],
-  );
+  const normalized = useMemo(() => unwrapOuterMarkdownFence(markdown), [markdown]);
   const rehypePlugins = useMemo<PluggableList>(
     () => {
       const highlightPlugin: [typeof rehypeHighlight, { ignoreMissing: boolean }] = [rehypeHighlight, { ignoreMissing: true }];
       return safe_mode
         ? [rehypeKatex, highlightPlugin]
-        : [rehypeKatex, rehypeRaw, highlightPlugin];
+        : [rehypeRaw, rehypeKatex, highlightPlugin];
     },
     [safe_mode],
   );

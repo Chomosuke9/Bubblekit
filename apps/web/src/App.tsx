@@ -564,7 +564,7 @@ function App() {
         >
           {isLoadingHistory && (
             <div className="text-sm text-neutral-500 dark:text-neutral-400">
-              Memuat riwayat...
+              Loading history...
             </div>
           )}
           {error && (
