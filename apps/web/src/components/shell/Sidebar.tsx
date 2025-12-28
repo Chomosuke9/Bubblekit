@@ -172,11 +172,11 @@ function Sidebar({
                 {/* History */}
                 <div className="space-y-1">
                   {conversations.length === 0 ? (
-                    <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
                       No conversations yet.
                     </p>
                   ) : filteredConversations.length === 0 ? (
-                    <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
                       No conversations found.
                     </p>
                   ) : (
