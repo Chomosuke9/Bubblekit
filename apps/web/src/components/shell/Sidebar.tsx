@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -27,12 +27,33 @@ function Sidebar({
   const [isOpen, setIsOpen] = useState(false);
   const [userIdDraft, setUserIdDraft] = useState(userId);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setUserIdDraft(userId);
   }, [userId]);
 
+  useEffect(() => {
+    const sidebar = sidebarRef.current;
+    if (!sidebar) return;
+
+    const handleTransitionEnd = (e: TransitionEvent) => {
+      // Hanya handle transisi width untuk menghindari multiple trigger
+      if (e.propertyName === 'width') {
+        setIsTransitioning(false);
+      }
+    };
+
+    sidebar.addEventListener('transitionend', handleTransitionEnd);
+
+    return () => {
+      sidebar.removeEventListener('transitionend', handleTransitionEnd);
+    };
+  }, []);
+
   function toggleSidebar() {
+    setIsTransitioning(true);
     if (isOpen) setIsOpen(false);
     else setIsOpen(true);
   }
@@ -84,6 +105,7 @@ function Sidebar({
     <>
       {/* Sidebar */}
       <div
+        ref={sidebarRef}
         className={[
           "fixed md:static z-50 left-0 bg-neutral-100 dark:bg-neutral-900 h-full @container flex flex-col",
           "transform transition-all duration-300 ease-in-out will-change-transform",
@@ -132,7 +154,7 @@ function Sidebar({
 
         {/* Main Bar */}
         {/* Sidebar: Scrollable content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
           <div>
             {/* New chat */}
             <GenerateMainBar
@@ -147,10 +169,10 @@ function Sidebar({
 
           {/* Conversations section */}
           <div
-            className={`grid overflow-hidden transition-[grid-template-rows,opacity,transform] duration-300 ease-in-out
+            className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-in-out
               ${isOpen
-                ? "grid-rows-[1fr] opacity-100 translate-y-0"
-                : "grid-rows-[0fr] opacity-0 -translate-y-1 pointer-events-none"
+                ? "grid-rows-[1fr] opacity-100"
+                : "grid-rows-[0fr] opacity-0 pointer-events-none"
               }
             `}
           >
@@ -192,10 +214,16 @@ function Sidebar({
                               : "hover:bg-neutral-200/60 dark:hover:bg-neutral-800/70",
                           ].join(" ")}
                         >
-                          <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                          <div className={[
+                            "text-sm font-medium text-neutral-900 dark:text-neutral-100",
+                            isTransitioning ? "overflow-hidden text-ellipsis whitespace-nowrap" : ""
+                          ].join(" ")}>
                             {conversation.title}
                           </div>
-                          <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                          <div className={[
+                            "text-[11px] text-neutral-500 dark:text-neutral-400",
+                            isTransitioning ? "overflow-hidden text-ellipsis whitespace-nowrap" : ""
+                          ].join(" ")}>
                             Updated {formattedDate}
                           </div>
                         </button>
@@ -212,8 +240,8 @@ function Sidebar({
 
         {/* User ID section */}
         <div
-          className={`grid overflow-hidden transition-[grid-template-rows,opacity,transform] duration-300 ease-in-out
-            ${isOpen ? "grid-rows-[1fr] opacity-100 translate-y-0" : "grid-rows-[0fr] opacity-0 -translate-y-1 pointer-events-none"}
+          className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-in-out
+            ${isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0 pointer-events-none"}
           `}
         >
           <div className="min-h-0">
