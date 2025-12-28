@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -27,33 +27,12 @@ function Sidebar({
   const [isOpen, setIsOpen] = useState(false);
   const [userIdDraft, setUserIdDraft] = useState(userId);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const sidebarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setUserIdDraft(userId);
   }, [userId]);
 
-  useEffect(() => {
-    const sidebar = sidebarRef.current;
-    if (!sidebar) return;
-
-    const handleTransitionEnd = (e: TransitionEvent) => {
-      // Hanya handle transisi width untuk menghindari multiple trigger
-      if (e.propertyName === 'width') {
-        setIsTransitioning(false);
-      }
-    };
-
-    sidebar.addEventListener('transitionend', handleTransitionEnd);
-
-    return () => {
-      sidebar.removeEventListener('transitionend', handleTransitionEnd);
-    };
-  }, []);
-
   function toggleSidebar() {
-    setIsTransitioning(true);
     if (isOpen) setIsOpen(false);
     else setIsOpen(true);
   }
@@ -105,7 +84,6 @@ function Sidebar({
     <>
       {/* Sidebar */}
       <div
-        ref={sidebarRef}
         className={[
           "fixed md:static z-50 left-0 bg-neutral-100 dark:bg-neutral-900 h-full @container flex flex-col",
           "transform transition-all duration-300 ease-in-out will-change-transform",
@@ -154,7 +132,7 @@ function Sidebar({
 
         {/* Main Bar */}
         {/* Sidebar: Scrollable content */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="flex-1 overflow-y-auto">
           <div>
             {/* New chat */}
             <GenerateMainBar
@@ -169,12 +147,18 @@ function Sidebar({
 
           {/* Conversations section */}
           <div
-            className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-in-out
+            className={`grid overflow-hidden ease-in-out
               ${isOpen
                 ? "grid-rows-[1fr] opacity-100"
                 : "grid-rows-[0fr] opacity-0 pointer-events-none"
               }
             `}
+            style={{
+              transitionProperty: 'grid-template-rows, opacity',
+              // This one is real, please dont change this value.
+              transitionDuration: isOpen ? '50ms, 300ms' : '20000ms, 300ms',
+              transitionTimingFunction: 'ease-in-out'
+            }}
           >
             <div className="min-h-0">
               <div className="mt-3 px-3 overflow-x-hidden">
@@ -207,23 +191,17 @@ function Sidebar({
                           aria-current={isSelected}
                           onClick={() => onSelectConversation(conversation.id)}
                           className={[
-                            "w-full rounded-lg border px-3 py-2 text-left transition-colors",
+                            "w-full rounded-lg border px-3 py-2 text-left transition-colors h-[60px] flex flex-col justify-center",
                             "border-neutral-200 dark:border-neutral-800",
                             isSelected
                               ? "bg-neutral-200/70 dark:bg-neutral-800"
                               : "hover:bg-neutral-200/60 dark:hover:bg-neutral-800/70",
                           ].join(" ")}
                         >
-                          <div className={[
-                            "text-sm font-medium text-neutral-900 dark:text-neutral-100",
-                            isTransitioning ? "overflow-hidden text-ellipsis whitespace-nowrap" : ""
-                          ].join(" ")}>
+                          <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100 overflow-hidden text-ellipsis whitespace-nowrap leading-tight min-w-0">
                             {conversation.title}
                           </div>
-                          <div className={[
-                            "text-[11px] text-neutral-500 dark:text-neutral-400",
-                            isTransitioning ? "overflow-hidden text-ellipsis whitespace-nowrap" : ""
-                          ].join(" ")}>
+                          <div className="text-[11px] text-neutral-500 dark:text-neutral-400 overflow-hidden text-ellipsis whitespace-nowrap leading-tight mt-0.5 min-w-0">
                             Updated {formattedDate}
                           </div>
                         </button>

@@ -2,40 +2,37 @@ import type { GenerateMainBarProps } from "../../types/ui";
 
 function GenerateMainBar({ isOpened, item }: GenerateMainBarProps) {
   const Icon = item.icon;
-
   return (
     <button
       onClick={item.onClick}
       className={[
-        "relative flex h-10 w-full items-center px-3",
-        isOpened ? null : "pointer-events-none md:pointer-events-auto",
+        "group flex h-10 w-full items-center justify-start",
+        "transition-all duration-130 ease-in-out",
+        isOpened ? "px-3" : "px-[calc(50%-12px)] pointer-events-none md:pointer-events-auto duration-700 ease-in",
+        "hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50 rounded-md"
       ].join(" ")}
       aria-label={!isOpened ? item.label : undefined}
     >
-      {/* MainBarGenerator: Icon */}
-      <span
+      <div className="flex shrink-0 items-center justify-center w-6 h-6 z-10">
+        <Icon className="w-5 h-5" />
+      </div>
+      <div
         className={[
-          "absolute top-1/2 -translate-y-1/2 transition-all ease-in-out",
+          "overflow-hidden whitespace-nowrap",
+          "transition-all duration-300 ease-in-out",
           isOpened
-            ? "left-3 translate-x-0 duration-150"
-            : "md:left-1/2 md:-translate-x-1/2 md:duration-800 opacity-0 md:opacity-100",
+            ? "max-w-[200px] opacity-100 ml-3"
+            : "max-w-0 opacity-0 ml-0"
         ].join(" ")}
       >
-        <Icon className="shrink-0" />
-      </span>
-
-      {/* MainBarGenerator: Label */}
-      <span
-        className={[
-          "ml-8 min-w-0 overflow-hidden whitespace-nowrap text-left",
-          "transition-[max-width,opacity,transform] duration-300 ease-in-out",
-          isOpened
-            ? "max-w-full opacity-100 translate-x-0 duration-1000"
-            : "max-w-0 opacity-0 -translate-x-1 pointer-events-none",
-        ].join(" ")}
-      >
-        <span className="block truncate">{item.label}</span>
-      </span>
+        <span className={[
+          "block text-sm font-medium",
+          "transition-transform duration-300 ease-in-out",
+          isOpened ? "translate-x-0" : "-translate-x-2"
+        ].join(" ")}>
+          {item.label}
+        </span>
+      </div>
     </button>
   );
 }
