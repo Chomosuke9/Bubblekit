@@ -132,7 +132,7 @@ function Sidebar({
 
         {/* Main Bar */}
         {/* Sidebar: Scrollable content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className={isOpen? "flex-1 overflow-y-auto" : "flex-1 overflow-y-hidden"}>
           <div>
             {/* New chat */}
             <GenerateMainBar
