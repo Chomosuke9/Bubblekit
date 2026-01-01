@@ -155,10 +155,11 @@ function Sidebar({
             `}
             style={{
               transitionProperty: 'grid-template-rows, opacity',
-              // This one is real, please dont change this value.
-              transitionDuration: isOpen ? '50ms, 300ms' : '20000ms, 300ms',
-              transitionTimingFunction: 'ease-in-out'
+              transitionDuration: isOpen ? '50ms, 300ms' : '0ms, 300ms',
+              transitionDelay: isOpen ? '0ms, 0ms' : '300ms, 0ms',
+              transitionTimingFunction: 'ease-in-out',
             }}
+
           >
             <div className="min-h-0">
               <div className="mt-3 px-3 overflow-x-hidden">
