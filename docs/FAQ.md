@@ -1,7 +1,7 @@
 # FAQ
 
-**How do I change the LLM/provider?**  
-Edit `apps/server/main.py` to swap `ChatOllama` for your model. Replace the `agent = create_agent(...)` wiring and adjust the chunk handling in `on.message`. Install the required client SDKs in the backend venv.
+**How do I add an LLM/provider?**  
+`apps/server/main.py` is intentionally empty and raises `UneditedServerFile` until you wire handlers. Register `on.message`/`on.new_chat` and call your preferred SDK (OpenAI, LangChain, etc.), then install those dependencies in the backend venv.
 
 **Where is data stored? Is it persistent?**  
 All state is in memory (`SessionStore` in `bubblekit.runtime` and `_conversation_lists`). Restarting the server or running multiple workers will lose or split state. Add a database or shared cache before production use.

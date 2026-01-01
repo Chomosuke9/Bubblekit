@@ -5,7 +5,7 @@ This doc explains how Bubblekit is wired end-to-end so new contributors can orie
 ## Big Picture
 - **Frontend (`apps/web`)**: React + Vite chat UI. Talks to the backend via REST + NDJSON streaming, renders bubbles with configurable colors/headers, and stores the dev-only `User-Id` override in `localStorage`.
 - **Backend (`apps/server`)**: FastAPI app produced by `bubblekit.create_app()`. Exposes conversation list/history endpoints and a streaming chat endpoint. Runtime state is kept in memory (no database).
-- **Handlers (`apps/server/main.py`)**: Project-specific callbacks for `on.message`, `on.history`, and `on.new_chat`. The current sample handler streams from a LangChain `ChatOllama` agent and keeps a global `memory` list.
+- **Handlers (`apps/server/main.py`)**: Project-specific callbacks for `on.message`, `on.history`, and `on.new_chat`. The checked-in file raises an `UneditedServerFile` until you replace it with your own logic (LLM/tooling of your choice).
 - **Runtime (`apps/server/bubblekit/runtime.py`)**: Manages sessions, bubbles, and NDJSON event emission. Provides helpers (`bubble`, `access_bubble`, `set_conversation_list`, etc.) that handlers call.
 
 ```mermaid
@@ -18,7 +18,7 @@ graph TD
     API[FastAPI app\ncreate_app()]
     Runtime[Bubble runtime\napps/server/bubblekit/runtime.py]
     Handlers[App handlers\napps/server/main.py]
-    Agent[LangChain ChatOllama\n(agent.astream)]
+    Model[Your LLM / tools\n(custom handlers)]
     Store[In-memory stores\nSessionStore + conversation lists]
   end
 
@@ -28,7 +28,7 @@ graph TD
   UI -->|POST /api/conversations/stream\nNDJSON response| API
   API --> Runtime
   Runtime --> Handlers
-  Handlers --> Agent
+  Handlers --> Model
   Runtime --> Store
   Store --> Runtime
   API --> UI
@@ -42,15 +42,15 @@ sequenceDiagram
   participant API as FastAPI /api/conversations/stream
   participant Runtime as Bubble runtime
   participant Handler as on.message (apps/server/main.py)
-  participant Agent as LangChain ChatOllama
+  participant Model as Your model / tools
 
   User->>UI: Type message + Send
   UI->>API: POST /api/conversations/stream\n{conversationId?, message}
   API->>Runtime: session = get_or_create(conversationId)
   API->>Handler: invoke on.message(MessageContext)
   Handler->>Runtime: bubble(...).send()
-  Handler->>Agent: agent.astream({"messages": memory})
-  Agent-->>Handler: stream chunks
+  Handler->>Model: invoke provider / tools
+  Model-->>Handler: stream chunks
   Handler->>Runtime: bubble.stream(...)\nbubble.done()
   Runtime-->>UI: NDJSON events\n(meta?, set/delta/config/done)
   API-->>UI: Stream closes; UI refreshes\nconversation list
@@ -97,4 +97,4 @@ classDiagram
 ## Deployment Notes
 - Default dev ports: FastAPI on `:8000` (see `uvicorn main:app --reload --port 8000`), Vite on `:5173`.
 - CORS defaults to localhost origins in `create_app(allow_origins=...)`.
-- Sample handler depends on `langchain` + `langchain-ollama` for `ChatOllama`; these are not pinned in `requirements.txt` and must be installed separately to run the demo logic.
+- The repo ships without an LLM/provider dependency; add your own (e.g., OpenAI SDK, LangChain) when wiring handlers into `apps/server/main.py`.

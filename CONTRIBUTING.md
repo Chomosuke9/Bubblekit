@@ -6,7 +6,7 @@ Welcome! This project is a lightweight monorepo for building chat apps. Please k
 - Node.js + npm (tested with npm lockfiles in repo).
 - Python 3.10+ (current `__pycache__` artifacts are from 3.13).
 - uvicorn/fastapi dependencies from `apps/server/requirements.txt`.
-- For the sample LangChain agent in `apps/server/main.py`, install `langchain` and `langchain-ollama` locally (not pinned in `requirements.txt`).
+- `apps/server/main.py` ships as a stub that raises `UneditedServerFile`; add your own handlers (and any provider SDKs) before running the backend.
 
 ## Setup
 1) Install frontend deps (runs in workspace root):
@@ -23,8 +23,6 @@ npm run dev
 cd apps/server
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-# Optional for demo handler:
-pip install langchain langchain-ollama
 uvicorn main:app --reload --port 8000
 ```
 

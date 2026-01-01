@@ -47,19 +47,14 @@ This document explains how the FastAPI app and handlers cooperate. Read this alo
 - `done`: `{ "type": "done", "bubbleId": "..." }`.
 - `error`: `{ "type": "error", "message": "..." }` emitted from the stream task on exceptions.
 
-## Demo Handlers (`apps/server/main.py`)
-- **Global state**: `memory` (list of `{role, content}`) shared across all users/conversations. Resets on `on.new_chat`.
-- **LLM agent**: `ChatOllama(model="qwen3-coder:480b-cloud")` via `langchain_ollama`; streamed with `agent.astream({"messages": memory}, stream_mode="messages")`.
-- **on.new_chat**: Sends a greeting bubble (`"Halo! Ada yang bisa dibantu?"`), seeds a stub conversation list via `set_conversation_list`, and resets `memory`.
-- **on.message**:
-  - Appends the incoming user message to `memory`.
-  - Creates a translucent assistant bubble and streams agent chunks into it, concatenating them into `final`.
-  - Appends the assistant response to `memory` when done.
-- **on.history**: Clears the active session, prints context, and sends two bubbles inline. Currently ignores persistent storage.
+## Handler Wiring (`apps/server/main.py`)
+- The tracked file raises `UneditedServerFile` until you replace it with your own handlers (LLM/tool orchestration, persistence, etc.).
+- Register `on.new_chat`, `on.message`, and optionally `on.history` to integrate with your provider. Tests patch the `on` registry directly.
+- Use helpers like `set_conversation_list`, `clear_conversation`, and `bubble(...).send()` inside your handlers as needed.
 
 ## Invariants & Pitfalls
 - `bubble.send()` / `access_bubble()` require an active context; calling them outside an endpoint will raise.
 - `bubble.config()` refuses `extra` keys `id`, `config`, or `colors` to prevent schema confusion.
-- `_conversation_lists` and `memory` are not thread-safe; concurrent requests can interleave updates.
+- `_conversation_lists` is not thread-safe; any globals you add in handlers will also be shared.
 - Missing `bubble.done()` is auto-finalized but triggers a warning (`warn_if_not_done`).
 - History endpoint returns sent bubbles when the handler returns `None`—this is how saved session bubbles surface without explicit payloads.

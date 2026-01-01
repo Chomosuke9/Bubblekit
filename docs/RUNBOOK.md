@@ -2,13 +2,14 @@
 
 Use this guide when operating or debugging Bubblekit in development.
 
+> Note: `apps/server/main.py` is a stub that raises `UneditedServerFile` until you register handlers. Replace it with your logic before running these steps.
+
 ## Bootstrapping
 1) Backend:
 ```sh
 cd apps/server
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-# Demo handler needs: pip install langchain langchain-ollama
 uvicorn main:app --reload --port 8000
 ```
 2) Frontend:
@@ -32,7 +33,7 @@ Look for NDJSON lines containing `meta`, `set`, `delta`, and `done`.
 ## Common Issues
 - **Stream stalls or 500s**: Check backend logs for exceptions in handlers. The stream emits `{type:"error"}` when handler raises; the frontend marks the active assistant bubble as errored.
 - **CORS errors**: Adjust `allow_origins` in `create_app()` or pass a custom list when constructing the app.
-- **Missing dependencies**: The sample handler requires `langchain` + `langchain-ollama`; install them if streaming fails with import errors.
+- **Missing dependencies**: Only FastAPI/uvicorn are pinned; install the SDKs used by your handlers (e.g., OpenAI, LangChain) if imports fail.
 - **State not persisting**: Conversation lists and sessions are in-memory. Restarts or multiple workers will lose data. Add persistence if needed.
 - **History looks empty**: `on.history` returning `None` will surface bubbles previously sent in-session; ensure the handler returns data or replays bubbles with `bubble(...).send()`.
 
@@ -49,5 +50,5 @@ Look for NDJSON lines containing `meta`, `set`, `delta`, and `done`.
 
 ## Operational Notes
 - All state is process-local; avoid multi-instance deployments without an external store.
-- `memory` in `apps/server/main.py` is shared across users; tailor or replace it for user-isolated histories.
+- Any globals you add in handler code are shared across users; prefer per-user/per-conversation storage when persisting state.
 - Color/config patches must conform to the flat schema; avoid sending nested `colors`/`config` keys directly in `bubble()`/`config()`.

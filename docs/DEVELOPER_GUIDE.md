@@ -9,14 +9,13 @@ Use this guide to go from zero to productive with Bubblekit. It links to deeper 
 - Frontend (`apps/web/src/App.tsx`) consumes NDJSON events, merges config patches, and renders message bubbles with optional headers/icons/colors.
 
 ## Getting Started
+0) Replace `apps/server/main.py` (it raises `UneditedServerFile` by default) with your handlers. See the README for a minimal echo example.
 1) Install deps:
 ```sh
 npm install             # frontend deps
 cd apps/server
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-# Demo handler needs extra packages:
-pip install langchain langchain-ollama
 ```
 2) Run backend: `uvicorn main:app --reload --port 8000` (from `apps/server`).
 3) Run frontend: `npm run dev` (from repo root; Vite on :5173). Optionally set `VITE_API_BASE_URL=http://localhost:8000`.
@@ -35,15 +34,12 @@ See `ARCHITECTURE.md` for diagrams and data model.
 - **Conversation**: Identified by `conversationId`. Session state is stored in-memory per ID (`SessionStore`), not persisted.
 - **Bubble**: Server-side unit with `id`, `role`, `type`, `content`, and config. Creates NDJSON events understood by the UI. Created via `bubble(...)`; send inside an active stream to emit events.
 - **Conversation list**: Stored in `_conversation_lists` keyed by normalized user ID; set via `set_conversation_list(user_id, list)`, read via `/api/conversations`.
-- **Handlers**: Register with `on.message`, `on.history`, `on.new_chat` (see `apps/server/main.py` for examples). Receive `MessageContext`, `HistoryContext`, or `NewChatContext`.
+- **Handlers**: Register with `on.message`, `on.history`, `on.new_chat` in `apps/server/main.py`. Receive `MessageContext`, `HistoryContext`, or `NewChatContext`.
 
 ## Backend Internals (high level)
 - `apps/server/bubblekit/server.py`: Builds FastAPI app, normalizes `User-Id`, and streams NDJSON. Also handles history requests and converts `Bubble` templates to plain dicts.
 - `apps/server/bubblekit/runtime.py`: Implements `Bubble`, `BubbleSession`, `SessionStore`, config merging, and context management. Auto-finalizes pending bubbles at stream end.
-- `apps/server/main.py`: Demo handlers that:
-  - Maintain a global `memory` list of prior messages (shared across users).
-  - Stream responses from a LangChain `ChatOllama` agent (`agent.astream(...)`).
-  - Set a stub conversation list on `on.new_chat` and reset `memory`.
+- `apps/server/main.py`: Entry point where you register handlers on `on`. The tracked file intentionally raises `UneditedServerFile` until you replace it with your own logic (LLM/tool integration, persistence, etc.). Tests patch the registry directly.
 - For module-by-module details, see `docs/INTERNALS/backend.md` and `docs/INTERNALS/runtime.md`.
 
 ## Frontend Internals (high level)
@@ -61,7 +57,7 @@ See `ARCHITECTURE.md` for diagrams and data model.
 ## Configuration
 - `VITE_API_BASE_URL`: Frontend env var for API base URL (defaults to same origin).
 - `create_app(allow_origins=...)`: Configure CORS origins; defaults to localhost dev origins.
-- LangChain model is set in `apps/server/main.py` (`ChatOllama(model="qwen3-coder:480b-cloud")`); change here when swapping providers.
+- Provider/model configuration lives in your handler code; there is no default LLM dependency.
 
 ## Error Handling & Logging
 - Stream errors emit `{ "type": "error", "message": "..." }` and abort the stream. UI marks the current assistant bubble as `error`.
@@ -74,7 +70,7 @@ See `ARCHITECTURE.md` for diagrams and data model.
 
 ## Performance/Scaling Considerations
 - All state is in-memory; restarting the backend clears conversations and lists. For multi-instance, externalize session/conversation storage and add sticky routing or WebSocket infra.
-- Streaming is sequential per request; the demo `memory` list is shared and not thread-safe. Use per-user/per-conversation stores before production.
+- Streaming is sequential per request; if you keep shared globals in handlers, guard them or move to per-user/per-conversation stores before production.
 - The UI renders the full message list; virtualize if conversations get large.
 
 ## Debugging Tips

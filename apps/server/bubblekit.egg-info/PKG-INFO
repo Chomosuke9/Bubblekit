@@ -27,6 +27,30 @@ VITE_API_BASE_URL=http://localhost:8000
 ```
 
 ### Backend
+`apps/server/main.py` intentionally raises an exception until you wire your own
+handlers. Replace its contents with something like this before starting
+uvicorn:
+
+```py
+from bubblekit import bubble, create_app, on
+
+app = create_app()
+
+
+@on.new_chat
+def handle_new_chat(conversation_id, user_id):
+    bubble(role="assistant", type="text").set("Hello!").send().done()
+
+
+@on.message
+def handle_message(ctx):
+    reply = bubble(role="assistant", type="text").send()
+    reply.set(f"Echo: {ctx.message}")
+    reply.done()
+```
+
+Then install backend deps (add your own model SDKs if needed) and run:
+
 ```sh
 cd apps/server
 python -m venv .venv
@@ -35,16 +59,12 @@ pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
-The sample handler in `apps/server/main.py` streams from LangChain + Ollama. Install them if you keep that demo logic:
-```sh
-pip install langchain langchain-ollama
-```
-
 ### One-command dev (backend + frontend)
 From repo root, run both servers together (uses `uvicorn` + `npm run dev`):
 ```sh
 python main.py --reload --host 0.0.0.0 --port 8000 --frontend-port 5173
 ```
+Make sure `apps/server/main.py` has been replaced with your handlers (the stub raises `UneditedServerFile`).
 Use `--no-frontend` to skip the Vite dev server.
 
 ## Backend documentation (user-facing functions)
