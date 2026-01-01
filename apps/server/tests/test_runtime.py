@@ -55,6 +55,19 @@ class RuntimeStreamTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(reply.config_data["name"], "Support")
 
+    async def test_collapsible_default_is_true_and_configurable(self):
+        reply = bubble(id="b1-collapse", collapsible=True).send()
+        event = await self.queue.get()
+        patch = event["patch"]
+        self.assertTrue(patch["collapsible"])
+        self.assertTrue(patch["collapsible_by_default"])
+        self.assertTrue(reply.config_data["collapsible_by_default"])
+
+        reply.config(collapsible_by_default=False)
+        update = await self.queue.get()
+        self.assertFalse(update["patch"]["collapsible_by_default"])
+        self.assertFalse(reply.config_data["collapsible_by_default"])
+
     async def test_bubble_stream_updates_state_and_emits_delta(self):
         reply = bubble(id="b2").send()
         await self.queue.get()

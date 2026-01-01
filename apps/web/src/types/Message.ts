@@ -21,6 +21,7 @@ export interface BubbleConfig {
   icon?: string | null;
   colors?: BubbleColors;
   collapsible?: boolean;
+  collapsible_by_default?: boolean;
   collapsible_title?: string | null;
   collapsible_max_height?: number | string | null;
   [key: string]: unknown;

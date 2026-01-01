@@ -189,6 +189,7 @@ bubble(
     header_icon_bg_color="auto",
     header_icon_text_color="auto",
     collapsible=...,
+    collapsible_by_default=True,
     collapsible_title=...,
     collapsible_max_height=...,
     extra=None,
@@ -298,6 +299,7 @@ The frontend renders these config fields when present:
 - `header_*_color`: `header_bg_color`, `header_text_color`, `header_border_color`,
   `header_icon_bg_color`, `header_icon_text_color`.
 - `collapsible`: enable collapsible UI when set to `true`.
+- `collapsible_by_default`: when `true` (default), collapsible bubbles start collapsed.
 - `collapsible_title`: label shown in the collapsible header.
 - `collapsible_max_height`: max height for collapsible content when `collapsible` is `true`
   (number = px, string = CSS value).

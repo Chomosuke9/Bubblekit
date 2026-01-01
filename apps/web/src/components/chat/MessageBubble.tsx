@@ -1,4 +1,4 @@
-import { type CSSProperties, type JSX, useState } from "react";
+import { type CSSProperties, type JSX, useEffect, useRef, useState } from "react";
 import { Bot, ChevronDown, ChevronRight, User } from "lucide-react";
 import type { BubbleConfig, BubbleColors } from "../../types/Message";
 import type { MessageBubbleProps } from "../../types/ui";
@@ -75,7 +75,11 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
   const collapsibleMaxHeight = isCollapsible
     ? normalizeMaxHeight(config?.collapsible_max_height)
     : null;
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const collapsibleByDefault =
+    isCollapsible && config?.collapsible_by_default !== false;
+  const [isCollapsed, setIsCollapsed] = useState(collapsibleByDefault);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
   const colors = getColors(config);
   const bubbleColors = colors.bubble;
   const headerColors = colors.header;
@@ -84,6 +88,17 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
   const iconStyle: CSSProperties = {};
   const contentStyle: CSSProperties = {};
   const DefaultIcon = isUser ? User : Bot;
+
+  useEffect(() => {
+    setIsCollapsed(collapsibleByDefault);
+  }, [collapsibleByDefault, message.id]);
+
+  useEffect(() => {
+    if (!isCollapsible) return;
+    const el = contentRef.current;
+    if (!el) return;
+    setMeasuredHeight(el.scrollHeight);
+  }, [isCollapsible, message.content, collapsibleMaxHeight, message.id]);
 
   if (bubbleColors?.bg) bubbleStyle.backgroundColor = bubbleColors.bg;
   if (bubbleColors?.text) bubbleStyle.color = bubbleColors.text;
@@ -102,9 +117,19 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
     ? "border-dashed border-neutral-300/70 bg-neutral-50/80 text-neutral-700 dark:border-neutral-700/70 dark:bg-neutral-900/50 dark:text-neutral-200"
     : "";
 
-  if (isCollapsible && collapsibleMaxHeight != null) {
-    contentStyle.maxHeight = collapsibleMaxHeight;
-    contentStyle.overflowY = "auto";
+  if (isCollapsible) {
+    const expandedMaxHeight =
+      collapsibleMaxHeight ??
+      (measuredHeight != null ? measuredHeight : "9999px");
+    contentStyle.maxHeight = isCollapsed ? 0 : expandedMaxHeight;
+    contentStyle.opacity = isCollapsed ? 0 : 1;
+    contentStyle.overflow = isCollapsed
+      ? "hidden"
+      : collapsibleMaxHeight != null
+        ? "auto"
+        : "visible";
+    contentStyle.transition = "max-height 200ms ease-in-out, opacity 200ms ease-in-out";
+    contentStyle.pointerEvents = isCollapsed ? "none" : "auto";
   }
 
   return (
@@ -164,39 +189,32 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
           {isCollapsible && (
             <button
               type="button"
-              className="mb-2 flex w-full items-center justify-between gap-2 text-xs font-medium text-neutral-500 dark:text-neutral-400"
+              className="mb-2 flex w-full items-center gap-2 text-xs font-medium text-neutral-500 dark:text-neutral-400"
               aria-expanded={!isCollapsed}
-              aria-label="Toggle bubble content"
+              aria-label={isCollapsed ? "Expand bubble content" : "Collapse bubble content"}
               onClick={() => setIsCollapsed((prev) => !prev)}
             >
-              <span className="flex items-center gap-1">
-                {isCollapsed ? (
-                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                )}
-                {collapsibleTitle && <span>{collapsibleTitle}</span>}
-              </span>
-              <span className="text-[11px] uppercase tracking-wide">
-                {isCollapsed ? "Expand" : "Collapse"}
-              </span>
+              {isCollapsed ? (
+                <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+              )}
+              {collapsibleTitle && <span>{collapsibleTitle}</span>}
             </button>
           )}
-          {(!isCollapsible || !isCollapsed) && (
-            <div
-              className={collapsibleMaxHeight ? "overflow-y-auto" : undefined}
-              style={contentStyle}
-            >
-              <MarkdownLLM
-                markdown={
-                  typeof message.content === "string"
-                    ? message.content
-                    : String(message.content ?? "")
-                }
-              />
-            </div>
-          )}
-
+          <div
+            ref={contentRef}
+            style={contentStyle}
+            aria-hidden={isCollapsible ? isCollapsed : false}
+          >
+            <MarkdownLLM
+              markdown={
+                typeof message.content === "string"
+                  ? message.content
+                  : String(message.content ?? "")
+              }
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -60,6 +60,7 @@ def _build_config_patch(
     header_icon_bg_color: Any = _COLOR_AUTO,
     header_icon_text_color: Any = _COLOR_AUTO,
     collapsible: Any = _UNSET,
+    collapsible_by_default: Any = _UNSET,
     collapsible_title: Any = _UNSET,
     collapsible_max_height: Any = _UNSET,
     extra: Optional[Dict[str, Any]] = None,
@@ -72,6 +73,8 @@ def _build_config_patch(
         patch["icon"] = icon
     if collapsible is not _UNSET:
         patch["collapsible"] = collapsible
+    if collapsible_by_default is not _UNSET:
+        patch["collapsible_by_default"] = collapsible_by_default
     if collapsible_title is not _UNSET:
         patch["collapsible_title"] = collapsible_title
     if collapsible_max_height is not _UNSET:
@@ -504,6 +507,7 @@ class Bubble:
         header_icon_bg_color: Any = _COLOR_AUTO,
         header_icon_text_color: Any = _COLOR_AUTO,
         collapsible: Any = _UNSET,
+        collapsible_by_default: Any = _UNSET,
         collapsible_title: Any = _UNSET,
         collapsible_max_height: Any = _UNSET,
         extra: Optional[Dict[str, Any]] = None,
@@ -529,6 +533,7 @@ class Bubble:
                 header_icon_bg_color=header_icon_bg_color,
                 header_icon_text_color=header_icon_text_color,
                 collapsible=collapsible,
+                collapsible_by_default=collapsible_by_default,
                 collapsible_title=collapsible_title,
                 collapsible_max_height=collapsible_max_height,
                 extra=extra,
@@ -671,6 +676,7 @@ def bubble(
     header_icon_bg_color: Any = _COLOR_AUTO,
     header_icon_text_color: Any = _COLOR_AUTO,
     collapsible: Any = _UNSET,
+    collapsible_by_default: Any = True,
     collapsible_title: Any = _UNSET,
     collapsible_max_height: Any = _UNSET,
     extra: Optional[Dict[str, Any]] = None,
@@ -697,6 +703,7 @@ def bubble(
             header_icon_bg_color=header_icon_bg_color,
             header_icon_text_color=header_icon_text_color,
             collapsible=collapsible,
+            collapsible_by_default=collapsible_by_default,
             collapsible_title=collapsible_title,
             collapsible_max_height=collapsible_max_height,
             extra=extra,
