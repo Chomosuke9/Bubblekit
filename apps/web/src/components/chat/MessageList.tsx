@@ -5,7 +5,7 @@ import MessageBubble from "./MessageBubble";
 
 function MessageList({ messages }: MessageListProps): JSX.Element {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1 select-text">
       {/* Message list container */}
       {/* Messages */}
       {messages.map((msg) => (

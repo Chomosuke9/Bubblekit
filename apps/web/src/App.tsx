@@ -10,6 +10,7 @@ import {
   type ConversationSummary,
   type StreamEvent,
 } from "@/lib/chatApi";
+import { isDesktopLike } from "@/lib/device";
 import { Moon, Sun } from "lucide-react";
 import { getUserId, resolveUserId, setUserId } from "@/lib/userId";
 
@@ -97,7 +98,7 @@ function App() {
   const didInitChatRef = useRef(false);
   const didSkipAbortRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLDivElement | null>(null);
+  const inputContainerRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
   const [inputHeight, setInputHeight] = useState(0);
   const [edgeSpace, setEdgeSpace] = useState(64);
@@ -160,7 +161,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const target = inputRef.current;
+    const target = inputContainerRef.current;
     if (!target) return;
 
     const updateHeight = () => {
@@ -174,6 +175,19 @@ function App() {
     const observer = new ResizeObserver(updateHeight);
     observer.observe(target);
     return () => observer.disconnect();
+  }, []);
+
+  const focusMessageInput = useCallback(() => {
+    if (!isDesktopLike()) return;
+
+    const textarea = inputContainerRef.current?.querySelector("textarea");
+    if (!textarea) return;
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const length = textarea.value.length;
+      textarea.setSelectionRange?.(length, length);
+    });
   }, []);
 
   useEffect(() => {
@@ -420,42 +434,51 @@ function App() {
     skipHistoryRef.current = false;
   }, []);
 
-  const startNewChat = useCallback(async () => {
-    streamAbortRef.current?.abort();
-    streamAbortRef.current = null;
-    setIsStreaming(false);
-    setIsLoadingHistory(false);
-    setError(null);
-    setConversationId(null);
-    setMessages([]);
-    shouldAutoScrollRef.current = true;
-    skipHistoryRef.current = true;
+  const startNewChat = useCallback(
+    async (options?: { focusInput?: boolean }) => {
+      const shouldFocusInput = options?.focusInput === true;
 
-    const controller = new AbortController();
-    streamAbortRef.current = controller;
-    setIsStreaming(true);
+      streamAbortRef.current?.abort();
+      streamAbortRef.current = null;
+      setIsStreaming(false);
+      setIsLoadingHistory(false);
+      setError(null);
+      setConversationId(null);
+      setMessages([]);
+      shouldAutoScrollRef.current = true;
+      skipHistoryRef.current = true;
 
-    try {
-      await streamChat({
-        baseUrl: API_BASE,
-        userId: resolveUserId(userId),
-        signal: controller.signal,
-        onEvent: (event) => {
-          handleStreamEvent(event, undefined, controller);
-        },
-      });
-    } catch (err) {
-      if (!(err instanceof DOMException && err.name === "AbortError")) {
-        setError("Streaming gagal. Coba lagi.");
+      if (shouldFocusInput) {
+        focusMessageInput();
       }
-    } finally {
-      if (streamAbortRef.current === controller) {
-        streamAbortRef.current = null;
-        setIsStreaming(false);
+
+      const controller = new AbortController();
+      streamAbortRef.current = controller;
+      setIsStreaming(true);
+
+      try {
+        await streamChat({
+          baseUrl: API_BASE,
+          userId: resolveUserId(userId),
+          signal: controller.signal,
+          onEvent: (event) => {
+            handleStreamEvent(event, undefined, controller);
+          },
+        });
+      } catch (err) {
+        if (!(err instanceof DOMException && err.name === "AbortError")) {
+          setError("Streaming gagal. Coba lagi.");
+        }
+      } finally {
+        if (streamAbortRef.current === controller) {
+          streamAbortRef.current = null;
+          setIsStreaming(false);
+        }
+        void refreshConversationList();
       }
-      void refreshConversationList();
-    }
-  }, [handleStreamEvent, refreshConversationList, userId]);
+    },
+    [focusMessageInput, handleStreamEvent, refreshConversationList, userId],
+  );
 
   useEffect(() => {
     if (didInitChatRef.current) return;
@@ -524,7 +547,7 @@ function App() {
   }
 
   return (
-    <div className="h-dvh w-full flex overflow-hidden">
+    <div className="h-dvh w-full flex overflow-hidden select-none">
       {/* Toggle Theme */}
       <button
         type="button"
@@ -535,7 +558,7 @@ function App() {
       </button>
       {/* Sidebar */}
       <Sidebar
-        onNewChat={startNewChat}
+        onNewChat={() => startNewChat({ focusInput: true })}
         conversations={conversations}
         onSelectConversation={handleSelectConversation}
         selectedConversationId={conversationId}
@@ -559,7 +582,7 @@ function App() {
         <div className="fixed z-0 top-0 from-neutral-50 dark:from-neutral-900 to-100% bg-linear-180 w-full h-1/12"></div>
         {/* Chat */}
         <div
-          className="mx-auto flex flex-col px-8 max-w-5xl"
+          className="mx-auto flex flex-col px-8 max-w-5xl select-text"
           style={{ paddingTop: edgeSpace, paddingBottom: bottomSpace }}
         >
           {isLoadingHistory && (
@@ -578,7 +601,7 @@ function App() {
           <MessageInput
             onSend={handleSend}
             disabled={isStreaming}
-            containerRef={inputRef}
+            containerRef={inputContainerRef}
           />
         </div>
       </div>
