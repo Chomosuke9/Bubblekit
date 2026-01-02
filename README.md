@@ -188,6 +188,7 @@ bubble(
     header_border_color="auto",
     header_icon_bg_color="auto",
     header_icon_text_color="auto",
+    header_is_hidden=False,
     collapsible=...,
     collapsible_by_default=True,
     collapsible_title=...,
@@ -298,6 +299,7 @@ The frontend renders these config fields when present:
 - `bubble_*_color`: `bubble_bg_color`, `bubble_text_color`, `bubble_border_color`.
 - `header_*_color`: `header_bg_color`, `header_text_color`, `header_border_color`,
   `header_icon_bg_color`, `header_icon_text_color`.
+- `header_is_hidden`: when `true`, hide the header (avatar + name) entirely. Defaults to `False`.
 - `collapsible`: enable collapsible UI when set to `true`.
 - `collapsible_by_default`: when `true` (default), collapsible bubbles start collapsed.
 - `collapsible_title`: label shown in the collapsible header.

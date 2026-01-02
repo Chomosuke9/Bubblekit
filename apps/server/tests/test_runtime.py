@@ -84,6 +84,18 @@ class RuntimeStreamTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(event2["content"], "!")
         self.assertEqual(reply.chat, "Hi!")
 
+    async def test_header_is_hidden_default_and_updates(self):
+        reply = bubble(id="b-header").send()
+        event = await self.queue.get()
+
+        self.assertIn("header_is_hidden", event["patch"])
+        self.assertFalse(event["patch"]["header_is_hidden"])
+
+        reply.config(header_is_hidden=True)
+        update = await self.queue.get()
+        self.assertTrue(update["patch"]["header_is_hidden"])
+        self.assertTrue(reply.config_data["header_is_hidden"])
+
     async def test_bubble_set_replaces_content_and_emits_set(self):
         reply = bubble(id="b3").send()
         await self.queue.get()

@@ -65,7 +65,8 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
   const iconUrl = hasIcon ? normalizeIcon(config?.icon) : null;
   const showIcon = hasIcon ? iconUrl !== null : true;
   const showName = name !== null;
-  const showHeader = showIcon || showName;
+  const headerIsHidden = config?.header_is_hidden === true;
+  const showHeader = !headerIsHidden && (showIcon || showName);
   const isTool = message.type === "tool";
   const isCollapsible = config?.collapsible === true;
   const collapsibleTitle =

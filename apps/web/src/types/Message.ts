@@ -19,6 +19,7 @@ export interface BubbleColors {
 export interface BubbleConfig {
   name?: string | null;
   icon?: string | null;
+  header_is_hidden?: boolean;
   colors?: BubbleColors;
   collapsible?: boolean;
   collapsible_by_default?: boolean;

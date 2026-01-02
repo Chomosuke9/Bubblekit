@@ -59,6 +59,7 @@ def _build_config_patch(
     header_border_color: Any = _COLOR_AUTO,
     header_icon_bg_color: Any = _COLOR_AUTO,
     header_icon_text_color: Any = _COLOR_AUTO,
+    header_is_hidden: Any = _UNSET,
     collapsible: Any = _UNSET,
     collapsible_by_default: Any = _UNSET,
     collapsible_title: Any = _UNSET,
@@ -79,6 +80,8 @@ def _build_config_patch(
         patch["collapsible_title"] = collapsible_title
     if collapsible_max_height is not _UNSET:
         patch["collapsible_max_height"] = collapsible_max_height
+    if header_is_hidden is not _UNSET:
+        patch["header_is_hidden"] = header_is_hidden
 
     colors: Dict[str, Any] = {}
     bubble: Dict[str, Any] = {}
@@ -506,6 +509,7 @@ class Bubble:
         header_border_color: Any = _COLOR_AUTO,
         header_icon_bg_color: Any = _COLOR_AUTO,
         header_icon_text_color: Any = _COLOR_AUTO,
+        header_is_hidden: Any = _UNSET,
         collapsible: Any = _UNSET,
         collapsible_by_default: Any = _UNSET,
         collapsible_title: Any = _UNSET,
@@ -532,6 +536,7 @@ class Bubble:
                 header_border_color=header_border_color,
                 header_icon_bg_color=header_icon_bg_color,
                 header_icon_text_color=header_icon_text_color,
+                header_is_hidden=header_is_hidden,
                 collapsible=collapsible,
                 collapsible_by_default=collapsible_by_default,
                 collapsible_title=collapsible_title,
@@ -675,6 +680,7 @@ def bubble(
     header_border_color: Any = _COLOR_AUTO,
     header_icon_bg_color: Any = _COLOR_AUTO,
     header_icon_text_color: Any = _COLOR_AUTO,
+    header_is_hidden: Any = False,
     collapsible: Any = _UNSET,
     collapsible_by_default: Any = True,
     collapsible_title: Any = _UNSET,
@@ -702,6 +708,7 @@ def bubble(
             header_border_color=header_border_color,
             header_icon_bg_color=header_icon_bg_color,
             header_icon_text_color=header_icon_text_color,
+            header_is_hidden=header_is_hidden,
             collapsible=collapsible,
             collapsible_by_default=collapsible_by_default,
             collapsible_title=collapsible_title,
