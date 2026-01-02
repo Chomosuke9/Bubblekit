@@ -117,6 +117,7 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
   const toolClass = isTool
     ? "border-dashed border-neutral-300/70 bg-neutral-50/80 text-neutral-700 dark:border-neutral-700/70 dark:bg-neutral-900/50 dark:text-neutral-200"
     : "";
+  const bubblePaddingY = headerIsHidden ? "py-0" : "py-2";
 
   if (isCollapsible) {
     const expandedMaxHeight =
@@ -135,14 +136,26 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
 
   return (
     <div
-      className={isUser ? "flex justify-end mb-3" : "flex justify-start mb-3"}
+      className={[
+        "flex",
+        isUser ? "justify-end" : "justify-start",
+        headerIsHidden ? "mb-1" : "mb-3",
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       {/* Bubble column wrapper */}
       <div
         className={
-          isUser
-            ? "flex max-w-4/5 flex-col items-end gap-1"
-            : "flex max-w-full flex-col items-start gap-1"
+          [
+            "flex",
+            isUser ? "max-w-4/5" : "max-w-full",
+            "flex-col",
+            isUser ? "items-end" : "items-start",
+            headerIsHidden ? "gap-0" : "gap-1",
+          ]
+            .filter(Boolean)
+            .join(" ")
         }
       >
         {/* Header */}
@@ -179,8 +192,9 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
         <div
           className={[
             isUser
-              ? "px-3 py-2 rounded-lg border border-transparent bg-neutral-200 text-sm text-neutral-900 dark:bg-neutral-700 dark:text-neutral-100 wrap-break-words max-w-full"
-              : "px-3 py-2 rounded-lg border border-transparent bg-neutral-100 text-sm text-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 wrap-break-words max-w-full",
+              ? "px-3 rounded-lg border border-transparent bg-neutral-200 text-sm text-neutral-900 dark:bg-neutral-700 dark:text-neutral-100 wrap-break-words max-w-full"
+              : "px-3 rounded-lg border border-transparent bg-neutral-100 text-sm text-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 wrap-break-words max-w-full",
+            bubblePaddingY,
             toolClass,
           ]
             .filter(Boolean)
@@ -190,7 +204,12 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
           {isCollapsible && (
             <button
               type="button"
-              className="mb-2 flex w-full items-center gap-2 text-xs font-medium text-neutral-500 dark:text-neutral-400"
+              className={[
+                headerIsHidden ? "my-1" : "mb-2",
+                "flex w-full items-center gap-2 text-xs font-medium text-neutral-500 dark:text-neutral-400",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               aria-expanded={!isCollapsed}
               aria-label={isCollapsed ? "Expand bubble content" : "Collapse bubble content"}
               onClick={() => setIsCollapsed((prev) => !prev)}
