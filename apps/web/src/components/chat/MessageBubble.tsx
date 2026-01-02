@@ -141,7 +141,7 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
         className={
           isUser
             ? "flex max-w-4/5 flex-col items-end gap-1"
-            : "flex max-w-4/5 flex-col items-start gap-1"
+            : "flex max-w-full flex-col items-start gap-1"
         }
       >
         {/* Header */}
@@ -178,8 +178,8 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
         <div
           className={[
             isUser
-              ? "px-3 py-2 rounded-lg border border-transparent bg-neutral-200 text-sm text-neutral-900 dark:bg-neutral-700 dark:text-neutral-100 wrap-break-words"
-              : "px-3 py-2 rounded-lg border border-transparent bg-neutral-100 text-sm text-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 wrap-break-words",
+              ? "px-3 py-2 rounded-lg border border-transparent bg-neutral-200 text-sm text-neutral-900 dark:bg-neutral-700 dark:text-neutral-100 wrap-break-words max-w-full"
+              : "px-3 py-2 rounded-lg border border-transparent bg-neutral-100 text-sm text-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 wrap-break-words max-w-full",
             toolClass,
           ]
             .filter(Boolean)

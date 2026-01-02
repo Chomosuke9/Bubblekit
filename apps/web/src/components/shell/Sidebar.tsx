@@ -132,7 +132,7 @@ function Sidebar({
 
         {/* Main Bar */}
         {/* Sidebar: Scrollable content */}
-        <div className={isOpen? "flex-1 overflow-y-auto" : "flex-1 overflow-y-hidden"}>
+        <div className={isOpen? "flex-1 overflow-y-scroll" : "flex-1 overflow-y-hidden"}>
           <div>
             {/* New chat */}
             <GenerateMainBar
@@ -161,7 +161,7 @@ function Sidebar({
             }}
 
           >
-            <div className="min-h-0">
+            <div className="min-h-0 min-w-0">
               <div className="mt-3 px-3 overflow-x-hidden">
                 {/* Conversations header */}
                 <div className="mb-2 flex items-center justify-between">
@@ -171,7 +171,7 @@ function Sidebar({
                 </div>
 
                 {/* History */}
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   {conversations.length === 0 ? (
                     <p className="text-sm text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
                       No conversations yet.
@@ -199,10 +199,10 @@ function Sidebar({
                               : "hover:bg-neutral-200/60 dark:hover:bg-neutral-800/70",
                           ].join(" ")}
                         >
-                          <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100 overflow-hidden text-ellipsis whitespace-nowrap leading-tight min-w-0">
+                          <div className="truncate text-sm font-medium text-neutral-900 dark:text-neutral-100 leading-tight min-w-0">
                             {conversation.title}
                           </div>
-                          <div className="text-[11px] text-neutral-500 dark:text-neutral-400 overflow-hidden text-ellipsis whitespace-nowrap leading-tight mt-0.5 min-w-0">
+                          <div className="truncate text-[11px] text-neutral-500 dark:text-neutral-400 leading-tight mt-0.5 min-w-0">
                             Updated {formattedDate}
                           </div>
                         </button>
