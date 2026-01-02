@@ -177,7 +177,7 @@ function CodeBlock({ language, code, className, children }: CodeBlockProps) {
           {copied ? "Copied" : "Copy code"}
         </button>
       </div>
-      <pre className="markdown-code-pre text-white">
+      <pre className="markdown-code-pre">
         <code className={className}>{children}</code>
       </pre>
     </div>
