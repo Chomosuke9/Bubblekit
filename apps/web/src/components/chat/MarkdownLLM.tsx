@@ -16,7 +16,7 @@ import remarkMath from "remark-math";
 import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
-import type {PluggableList } from "unified";
+import type { PluggableList } from "unified";
 import mermaid from "mermaid";
 import "katex/dist/katex.min.css";
 
@@ -73,6 +73,83 @@ function unwrapOuterMarkdownFence(input: string): string {
 
   // Keep real code fences (js/python/etc.) as-is.
   return input;
+}
+
+/**
+ * Convert LLM LaTeX delimiters:
+ *   \[...\]  -> $$...$$   (display math)
+ *   \(..\)   -> $..$      (inline math; multiline becomes $$..$$)
+ *
+ * Hardening:
+ * - Do NOT touch fenced code blocks (```...``` or ~~~...~~~)
+ * - Do NOT touch inline code spans (`...`)
+ */
+function preprocessLatexDelimiters(input: string): string {
+  if (!input) return "";
+
+  const src = input.replace(/\r\n/g, "\n");
+
+  // Split by fenced code blocks so we don't touch code samples (including ```mermaid)
+  const fencedParts = src.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g);
+
+  const convertInText = (text: string): string => {
+    // Split by inline code spans to avoid touching `...`
+    const segments: string[] = [];
+    let i = 0;
+
+    while (i < text.length) {
+      const start = text.indexOf("`", i);
+      if (start === -1) {
+        segments.push(text.slice(i));
+        break;
+      }
+
+      // push preceding text
+      segments.push(text.slice(i, start));
+
+      // count backtick run length
+      let run = 1;
+      while (start + run < text.length && text[start + run] === "`") run++;
+      const fence = "`".repeat(run);
+
+      // find matching closing run
+      const end = text.indexOf(fence, start + run);
+      if (end === -1) {
+        // unmatched backticks -> treat rest as normal text
+        segments.push(text.slice(start));
+        break;
+      }
+
+      // keep inline code as-is
+      segments.push(text.slice(start, end + run));
+      i = end + run;
+    }
+
+    // Apply LaTeX delimiter conversion only on non-code segments (even indices)
+    for (let k = 0; k < segments.length; k += 2) {
+      let s = segments[k];
+
+      // block: \[...\] -> $$...$$ (multiline ok)
+      s = s.replace(/\\\[(.*?)\\\]/gs, (_m: string, eq: string) => `$$${eq}$$`);
+
+      // inline: \(..\) -> $..$ ; if multiline, prefer display $$..$$
+      s = s.replace(/\\\((.*?)\\\)/gs, (_m: string, eq: string) =>
+        eq.includes("\n") ? `$$${eq}$$` : `$${eq}$`
+      );
+
+      segments[k] = s;
+    }
+
+    return segments.join("");
+  };
+
+  return fencedParts
+    .map((part) => {
+      // Keep fenced blocks untouched
+      if (part.startsWith("```") || part.startsWith("~~~")) return part;
+      return convertInText(part);
+    })
+    .join("");
 }
 
 function extractText(value: ReactNode): string {
@@ -229,73 +306,79 @@ function MermaidDiagram({ chart }: { chart: string }) {
  * - Soft line breaks via remark-breaks (newline -> <br>)
  * - Mermaid via ```mermaid fences
  * - Unwrap outer ```markdown fences if present
+ * - Normalize LLM LaTeX \[...\] and \(..\)
  */
 export const MarkdownLLM = memo(function MarkdownLLM({
   markdown,
   className,
   safe_mode = false,
 }: MarkdownLLMProps) {
-  const normalized = useMemo(() => unwrapOuterMarkdownFence(markdown), [markdown]);
-  const rehypePlugins = useMemo<PluggableList>(
-    () => {
-      const highlightPlugin: [typeof rehypeHighlight, { ignoreMissing: boolean }] = [rehypeHighlight, { ignoreMissing: true }];
-      return safe_mode
-        ? [rehypeKatex, highlightPlugin]
-        : [rehypeRaw, rehypeKatex, highlightPlugin];
-    },
-    [safe_mode],
-  );
+  const normalized = useMemo(() => {
+    const unwrapped = unwrapOuterMarkdownFence(markdown);
+    return preprocessLatexDelimiters(unwrapped);
+  }, [markdown]);
+
+  const rehypePlugins = useMemo<PluggableList>(() => {
+    const highlightPlugin: [typeof rehypeHighlight, { ignoreMissing: boolean }] = [
+      rehypeHighlight,
+      { ignoreMissing: true },
+    ];
+    return safe_mode
+      ? [rehypeKatex, highlightPlugin]
+      : [rehypeRaw, rehypeKatex, highlightPlugin];
+  }, [safe_mode]);
 
   return (
     <>
       {/* MarkdownLLM: container */}
-    <div className={className ? `markdown-llm ${className}` : "markdown-llm"}>
-      {/* MarkdownLLM: <Markdown> renderer */}
-      <Markdown
-        remarkPlugins={[remarkMath, remarkGfm, remarkBreaks]}
-        rehypePlugins={rehypePlugins}
-        skipHtml={safe_mode}
-        components={{
-          a: (props) => (
-            <a {...props} target="_blank" rel="noopener noreferrer" />
-          ),
+      <div className={className ? `markdown-llm ${className}` : "markdown-llm"}>
+        {/* MarkdownLLM: <Markdown> renderer */}
+        <Markdown
+          remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
+          rehypePlugins={rehypePlugins}
+          skipHtml={safe_mode}
+          components={{
+            a: (props) => <a {...props} target="_blank" rel="noopener noreferrer" />,
 
-          // Intercept fenced mermaid blocks: ```mermaid ... ```
-          pre: ({ children, ...props }) => {
-            const child = Array.isArray(children) ? children[0] : children;
+            // Intercept fenced mermaid blocks: ```mermaid ... ```
+            pre: ({ children, ...props }) => {
+              const child = Array.isArray(children) ? children[0] : children;
 
-            if (isValidElement(child)) {
-              const childProps = child.props as { className?: string; children?: ReactNode };
-              const className = childProps?.className;
-              const raw = childProps?.children;
-              const text = extractText(raw).replace(/\n$/, "");
-              const rendered = raw ?? text;
+              if (isValidElement(child)) {
+                const childProps = child.props as {
+                  className?: string;
+                  children?: ReactNode;
+                };
+                const className = childProps?.className;
+                const raw = childProps?.children;
+                const text = extractText(raw).replace(/\n$/, "");
+                const rendered = raw ?? text;
 
-              if (className && /\blanguage-mermaid\b/i.test(className)) {
-                return <MermaidDiagram chart={text} />;
+                if (className && /\blanguage-mermaid\b/i.test(className)) {
+                  return <MermaidDiagram chart={text} />;
+                }
+
+                if (child.type === "code" || className) {
+                  return (
+                    <CodeBlock
+                      language={getLanguageFromClassName(className)}
+                      code={text}
+                      className={className}
+                    >
+                      {rendered}
+                    </CodeBlock>
+                  );
+                }
               }
 
-              if (child.type === "code" || className) {
-                return (
-                  <CodeBlock
-                    language={getLanguageFromClassName(className)}
-                    code={text}
-                    className={className}
-                  >
-                    {rendered}
-                  </CodeBlock>
-                );
-              }
-            }
-
-            return <pre {...props}>{children}</pre>;
-          },
-        }}
-      >
-        {/* MarkdownLLM: rendered content */}
-        {normalized}
-      </Markdown>
-    </div>
+              return <pre {...props}>{children}</pre>;
+            },
+          }}
+        >
+          {/* MarkdownLLM: rendered content */}
+          {normalized}
+        </Markdown>
+      </div>
     </>
   );
 });

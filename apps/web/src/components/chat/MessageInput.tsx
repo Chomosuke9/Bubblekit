@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { IconPlus } from "@tabler/icons-react";
-import { ArrowUpIcon } from "lucide-react";
+import { ArrowUpIcon, Loader2, Square } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,7 +18,14 @@ import { Separator } from "@/components/ui/separator";
 import { isDesktopLike } from "@/lib/device";
 import type { MessageInputProps } from "../../types/ui";
 
-function MessageInput({ onSend, disabled, containerRef }: MessageInputProps) {
+function MessageInput({
+  onSend,
+  onInterrupt,
+  disabled,
+  isStreaming,
+  isInterrupting,
+  containerRef,
+}: MessageInputProps) {
   const [text, setText] = useState<string>("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -63,13 +70,16 @@ function MessageInput({ onSend, disabled, containerRef }: MessageInputProps) {
             variant="outline"
             className="rounded-full"
             size="icon-xs"
+            disabled={isStreaming}
           >
             <IconPlus />
           </InputGroupButton>
           {/* Mode selector */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <InputGroupButton variant="ghost">Auto</InputGroupButton>
+              <InputGroupButton variant="ghost" disabled={isStreaming}>
+                Auto
+              </InputGroupButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               side="top"
@@ -85,6 +95,23 @@ function MessageInput({ onSend, disabled, containerRef }: MessageInputProps) {
           <InputGroupText className="ml-auto"></InputGroupText>
           {/* Divider */}
           <Separator orientation="vertical" className="h-4!" />
+          {/* Stop button */}
+          {isStreaming && (
+            <InputGroupButton
+              variant="secondary"
+              className="rounded-full"
+              size="icon-xs"
+              disabled={!onInterrupt || isInterrupting}
+              onClick={() => onInterrupt?.()}
+            >
+              {isInterrupting ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Square className="h-4 w-4" aria-hidden="true" />
+              )}
+              <span className="sr-only">Stop</span>
+            </InputGroupButton>
+          )}
           {/* Send button */}
           <InputGroupButton
             variant="default"

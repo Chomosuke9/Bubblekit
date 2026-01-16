@@ -1,12 +1,16 @@
 import type { BubbleConfig, Message } from "@/types/Message";
 
 export type StreamEvent =
-  | { type: "meta"; conversationId: string }
-  | { type: "set"; bubbleId?: string; content: string }
-  | { type: "delta"; bubbleId?: string; content: string }
-  | { type: "config"; bubbleId?: string; patch: Record<string, unknown> }
-  | { type: "done"; bubbleId?: string; messageId?: string }
-  | { type: "error"; message: string };
+  | { type: "meta"; conversationId: string; streamId?: string; seq?: number }
+  | { type: "started"; conversationId?: string; streamId: string; seq?: number }
+  | { type: "heartbeat"; streamId?: string; seq?: number }
+  | { type: "progress"; stage?: string; streamId?: string; seq?: number }
+  | { type: "set"; bubbleId?: string; content: string; streamId?: string; seq?: number }
+  | { type: "delta"; bubbleId?: string; content: string; streamId?: string; seq?: number }
+  | { type: "config"; bubbleId?: string; patch: Record<string, unknown>; streamId?: string; seq?: number }
+  | { type: "done"; bubbleId?: string; messageId?: string; reason?: string; streamId?: string; seq?: number }
+  | { type: "interrupted"; reason?: string; streamId?: string; seq?: number }
+  | { type: "error"; message: string; reason?: string; streamId?: string; seq?: number };
 
 interface FetchHistoryOptions {
   baseUrl?: string;
@@ -27,6 +31,13 @@ interface FetchConversationListOptions {
   baseUrl?: string;
   signal?: AbortSignal;
   userId?: string;
+}
+
+interface CancelStreamOptions {
+  baseUrl?: string;
+  streamId: string;
+  userId?: string;
+  signal?: AbortSignal;
 }
 
 interface ApiMessage {
@@ -185,4 +196,26 @@ export async function fetchConversationList(
     title: conversation.title,
     updatedAt: conversation.updatedAt,
   }));
+}
+
+export async function cancelStream(options: CancelStreamOptions) {
+  const url = buildUrl(
+    options.baseUrl,
+    `/api/streams/${encodeURIComponent(options.streamId)}/cancel`,
+  );
+
+  const response = await fetch(url, {
+    method: "POST",
+    signal: options.signal,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.userId ? { "User-Id": options.userId } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Cancel request failed: ${response.status}`);
+  }
+
+  return response.json() as Promise<{ status: string }>;
 }

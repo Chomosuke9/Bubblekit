@@ -5,7 +5,7 @@ This file implements the Bubblekit primitives used by handlers and the HTTP laye
 ## Core Types
 - `BubbleState`: Immutable identifiers (`id`, `role`, `type`) plus mutable `content`, `config`, `created_at`, `done`.
 - `BubbleSession`: Owns ordered `BubbleState` objects for a conversation. Holds an optional `StreamChannel` to emit NDJSON events.
-- `StreamChannel`: Wraps an `asyncio.Queue` and event loop, allowing emits from non-running threads with `call_soon_threadsafe`.
+- `StreamChannel`: Wraps an `asyncio.Queue` and event loop, allowing emits from non-running threads with `call_soon_threadsafe`. Automatically tags events with `streamId` and a monotonic `seq`.
 - `SessionStore`: Map of `conversation_id -> BubbleSession`; `get_or_create` is the only entry point.
 - Contexts: `MessageContext`, `HistoryContext`, `NewChatContext` (used for handler signatures and user scoping).
 

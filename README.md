@@ -384,13 +384,20 @@ curl -N http://localhost:8000/api/conversations/stream   -H "Content-Type: appli
 ```
 
 ## Streaming contract (NDJSON)
-Each line is a JSON object:
-- `meta`: `{ "type": "meta", "conversationId": "..." }`
+Each line is a JSON object (all events include `streamId` + monotonically increasing `seq`):
+- `meta`: `{ "type": "meta", "conversationId": "..." }` (only when the server assigns a new ID)
+- `started`: `{ "type": "started" }` (stream-level start)
+- `progress`: `{ "type": "progress", "stage": "processing" }` (minimal stage emitted at start; add more from handlers as needed)
+- `heartbeat`: `{ "type": "heartbeat" }` (every 15s while active)
 - `set`: `{ "type": "set", "bubbleId": "...", "content": "..." }`
 - `delta`: `{ "type": "delta", "bubbleId": "...", "content": "..." }`
 - `config`: `{ "type": "config", "bubbleId": "...", "patch": { "type": "tool" } }`
-- `done`: `{ "type": "done", "bubbleId": "..." }`
-- `error`: `{ "type": "error", "message": "..." }`
+- `done`: `{ "type": "done", "bubbleId": "..." }` (bubble-level)
+- `done`: `{ "type": "done", "reason": "normal" }` (stream-level terminal; no `bubbleId`)
+- `interrupted`: `{ "type": "interrupted", "reason": "client_cancel|idle_timeout|disconnect" }`
+- `error`: `{ "type": "error", "message": "...", "reason": "handler_error|upstream_error|..." }`
+
+Client-side guidance (defaults): heartbeat every 15s, idle watchdog 60s, first-event timeout 30s. To cancel an active stream, use the AbortController locally **and** `POST /api/streams/{streamId}/cancel` so the server stops work.
 
 The web UI includes a User ID input in the sidebar (hidden when collapsed) to
 update the `User-Id` header during development. The value is saved to

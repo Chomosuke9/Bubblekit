@@ -51,8 +51,8 @@ See `ARCHITECTURE.md` for diagrams and data model.
 ## API Quick Reference
 - `GET /api/conversations` → `{ conversations: [{id,title,updatedAt}] }` (scoped by optional `User-Id`).
 - `GET /api/conversations/{conversationId}/messages` → `{ conversationId, messages: [...] }`. History handler can return `Bubble` templates or dicts.
-- `POST /api/conversations/stream` → NDJSON stream of events. Body: `{ conversationId?, message? }`. Emits `meta` when a new conversation is created.
-- Streaming events: `meta`, `set`, `delta`, `config`, `done`, `error` (see `docs/INTERNALS/backend.md` for shapes).
+- `POST /api/conversations/stream` → NDJSON stream of events. Body: `{ conversationId?, message? }`. Emits `meta` when a new conversation is created. Stream-level control: `started`, `progress`, `heartbeat`, terminals `done|interrupted|error` (with `reason`), plus bubble events (`config/set/delta/done`), all carrying `streamId` + `seq` (see `docs/INTERNALS/backend.md` for shapes). Defaults: heartbeat 15s, first-event timeout 30s, idle 60s.
+- `POST /api/streams/{streamId}/cancel` → best-effort cancel; call alongside AbortController on the client to stop backend work.
 
 ## Configuration
 - `VITE_API_BASE_URL`: Frontend env var for API base URL (defaults to same origin).

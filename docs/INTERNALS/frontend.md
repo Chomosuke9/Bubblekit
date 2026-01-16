@@ -12,8 +12,9 @@ This document describes how the React/Vite UI consumes the Bubblekit API and ren
 - **User ID handling**: Uses `getUserId`/`setUserId`/`resolveUserId` (`localStorage` key `bubblekit-user-id`). Changing the user ID aborts active streams, clears state, and reloads the conversation list.
 - **History load**: On conversation selection, fetches `GET /api/conversations/{id}/messages` via `fetchMessageHistory`. Shows a loading indicator and handles `AbortError`.
 - **Streaming**:
-  - Uses `streamChat` with an `AbortController`. Stores a temporary assistant bubble ID to reconcile `config/delta` events arriving without IDs.
-  - `handleStreamEvent` routes `meta` (sets conversationId), `error` (marks bubble as error and aborts), and delegates `set`/`delta`/`config`/`done` to `updateMessageFromEvent`.
+  - Uses `streamChat` with an `AbortController` plus `cancelStream(streamId)` best-effort to stop backend work. Tracks `streamId` from `started` events.
+  - Heartbeat/idle guard: first-event timeout 30s, idle watchdog 60s (reset on `delta`/`config`/`progress`/`heartbeat`), heartbeat every 15s.
+  - `handleStreamEvent` routes `meta` (sets conversationId), `started` (captures `streamId`), `heartbeat`/`progress` (watchdog only), `interrupted`/stream-level `done` (finish stream), `error` (marks bubble as error and aborts), and delegates `set`/`delta`/`config`/bubble `done` to `updateMessageFromEvent`.
   - `mergeConfigPatch` mirrors backend color merging to avoid dropping existing colors when a partial patch arrives.
 - **Conversation list refresh**: Invoked after streams complete and on app load via `fetchConversationList`. Scoped by `User-Id` header when provided.
 - **Layout**: Sidebar + main chat panel. Auto-scroll toggled based on distance from bottom; `ResizeObserver` tracks input height to maintain padding.
@@ -22,14 +23,15 @@ This document describes how the React/Vite UI consumes the Bubblekit API and ren
 ## Components
 - `components/chat/MessageList.tsx`: Renders messages sequentially.
 - `components/chat/MessageBubble.tsx`: Applies role-based styles, optional header with icon/name, collapsible bodies for tool outputs, and color overrides from `config.colors`. Uses `MarkdownLLM` to render markdown.
-- `components/chat/MessageInput.tsx`: Textarea + send button (disabled while streaming).
+- `components/chat/MessageInput.tsx`: Textarea + send button (disabled while streaming) and a stop button that shows a spinner while an interrupt is in flight.
 - `components/shell/Sidebar.tsx`: Collapsible sidebar with search placeholder, "New chat" button, conversation list with `updatedAt` formatting, and User ID form.
 - `components/shell/MainBarGenerator.tsx`: Simple helper to render sidebar action items.
 - `components/ui/*`: Lightweight styled wrappers around inputs/buttons/dropdowns.
 
 ## API Client (`lib/chatApi.ts`)
 - `fetchMessageHistory(conversationId, { baseUrl?, signal?, userId? })`: Fetches messages; converts API payload to `Message` shape.
-- `streamChat({ baseUrl?, conversationId?, message?, signal?, userId?, onEvent })`: Issues POST and parses NDJSON stream, yielding `StreamEvent` objects (`meta/set/delta/config/done/error`).
+- `streamChat({ baseUrl?, conversationId?, message?, signal?, userId?, onEvent })`: Issues POST and parses NDJSON stream, yielding `StreamEvent` objects (`started/meta/set/delta/config/done/interrupted/error/heartbeat/progress`).
+- `cancelStream({ baseUrl?, streamId, userId?, signal? })`: Idempotent best-effort cancel; pair with AbortController.
 - `fetchConversationList({ baseUrl?, signal?, userId? })`: Returns ordered `ConversationSummary[]`.
 - `parseStreamLines` logic buffers partial lines to ensure each NDJSON object is parsed once.
 

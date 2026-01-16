@@ -16,10 +16,13 @@ This document explains how the FastAPI app and handlers cooperate. Read this alo
     - Accepts history items as dicts or `Bubble` objects; the latter are normalized to dicts.
   - `POST /api/conversations/stream`:
     - Normalizes `conversationId` (creates one via `_new_id` when missing) and `User-Id`.
-    - Attaches a `StreamChannel` to the session and starts an NDJSON `StreamingResponse`.
+    - Attaches a `StreamChannel` to the session and starts an NDJSON `StreamingResponse` (all events include `streamId` + `seq`).
     - When `conversationId` is missing, emits `{type:"meta",conversationId}` first and calls `on.new_chat_handler`.
     - Calls `on.message_handler(MessageContext)` if a non-empty `message` is provided.
-    - On exit, finalizes pending bubbles (`done` events) and emits warnings for unfinished ones.
+    - Emits stream-level control (`started`, `progress`, `heartbeat`), enforces first-event timeout (30s) and idle timeout (60s; heartbeat every 15s).
+    - Emits terminal control with `reason` (`done`, `interrupted`, `error`) and finalizes pending bubbles (`done` events) before closing.
+  - `POST /api/streams/{stream_id}/cancel`:
+    - Idempotent best-effort stop for an active stream. Cancels the handler task and emits `interrupted` terminal control.
 - Handler invocation helpers (`_call_history_handler`, `_call_new_chat_handler`) preserve backward compatibility with positional args or context objects.
 
 ## Runtime Primitives (`bubblekit.runtime`)
@@ -40,12 +43,17 @@ This document explains how the FastAPI app and handlers cooperate. Read this alo
   - `access_bubble(bubble_id)`: Retrieves an existing bubble in the active stream; raises when no stream is active.
 
 ## Event Contract (NDJSON)
+- `started`: stream-level start marker.
+- `progress`: `{ "type": "progress", "stage": "processing" }` (handlers may emit additional stages).
+- `heartbeat`: `{ "type": "heartbeat" }` every 15s.
 - `meta`: `{ "type": "meta", "conversationId": "..." }` (only on server-created IDs).
 - `config`: `{ "type": "config", "bubbleId": "...", "patch": {...} }` (includes role/type and merged config).
 - `set`: `{ "type": "set", "bubbleId": "...", "content": "..." }`.
 - `delta`: `{ "type": "delta", "bubbleId": "...", "content": "..." }`.
-- `done`: `{ "type": "done", "bubbleId": "..." }`.
-- `error`: `{ "type": "error", "message": "..." }` emitted from the stream task on exceptions.
+- `done`: `{ "type": "done", "bubbleId": "..." }` (bubble-level).
+- `done`: `{ "type": "done", "reason": "normal" }` (stream-level terminal).
+- `interrupted`: `{ "type": "interrupted", "reason": "client_cancel|idle_timeout|disconnect" }`.
+- `error`: `{ "type": "error", "message": "...", "reason": "handler_error|upstream_error|..." }` emitted from the stream task on exceptions.
 
 ## Handler Wiring (`apps/server/main.py`)
 - The tracked file raises `UneditedServerFile` until you replace it with your own handlers (LLM/tool orchestration, persistence, etc.).

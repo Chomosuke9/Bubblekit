@@ -23,7 +23,7 @@ class RuntimeStreamTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.session = BubbleSession("test-session")
         self.queue = asyncio.Queue()
-        self.stream = StreamChannel(self.queue, asyncio.get_running_loop())
+        self.stream = StreamChannel(self.queue, asyncio.get_running_loop(), "stream-test")
         self.token = set_active_context(self.session, stream=self.stream)
         self.session.attach_stream(self.stream)
 
@@ -265,7 +265,7 @@ class RuntimeExtraValidationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.session = BubbleSession("extra-session")
         self.queue = asyncio.Queue()
-        self.stream = StreamChannel(self.queue, asyncio.get_running_loop())
+        self.stream = StreamChannel(self.queue, asyncio.get_running_loop(), "stream-extra")
         self.token = set_active_context(self.session, stream=self.stream)
         self.session.attach_stream(self.stream)
 

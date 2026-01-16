@@ -6,6 +6,7 @@ import Sidebar from "./components/shell/Sidebar";
 import {
   fetchConversationList,
   fetchMessageHistory,
+  cancelStream,
   streamChat,
   type ConversationSummary,
   type StreamEvent,
@@ -15,6 +16,8 @@ import { Moon, Sun } from "lucide-react";
 import { getUserId, resolveUserId, setUserId } from "@/lib/userId";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+const FIRST_EVENT_TIMEOUT_MS = 30_000;
+const IDLE_TIMEOUT_MS = 60_000;
 
 function mergeConfigPatch(
   current: Message["config"] | undefined,
@@ -90,10 +93,14 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isInterrupting, setIsInterrupting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const streamAbortRef = useRef<AbortController | null>(null);
   const conversationListAbortRef = useRef<AbortController | null>(null);
+  const activeStreamIdRef = useRef<string | null>(null);
+  const idleTimeoutRef = useRef<number | null>(null);
+  const firstEventTimeoutRef = useRef<number | null>(null);
   const skipHistoryRef = useRef(false);
   const didInitChatRef = useRef(false);
   const didSkipAbortRef = useRef(false);
@@ -102,6 +109,51 @@ function App() {
   const shouldAutoScrollRef = useRef(true);
   const [inputHeight, setInputHeight] = useState(0);
   const [edgeSpace, setEdgeSpace] = useState(64);
+
+  const clearIdleTimer = useCallback(() => {
+    if (idleTimeoutRef.current != null) {
+      window.clearTimeout(idleTimeoutRef.current);
+      idleTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearFirstEventTimer = useCallback(() => {
+    if (firstEventTimeoutRef.current != null) {
+      window.clearTimeout(firstEventTimeoutRef.current);
+      firstEventTimeoutRef.current = null;
+    }
+  }, []);
+
+  const finishStream = useCallback(() => {
+    clearIdleTimer();
+    clearFirstEventTimer();
+    activeStreamIdRef.current = null;
+    setIsStreaming(false);
+    setIsInterrupting(false);
+  }, [clearFirstEventTimer, clearIdleTimer]);
+
+  const resetIdleTimer = useCallback(() => {
+    clearIdleTimer();
+    idleTimeoutRef.current = window.setTimeout(() => {
+      setError("Streaming dihentikan karena idle.");
+      finishStream();
+      streamAbortRef.current?.abort();
+    }, IDLE_TIMEOUT_MS);
+  }, [clearIdleTimer, finishStream]);
+
+  const startFirstEventTimer = useCallback(() => {
+    clearFirstEventTimer();
+    firstEventTimeoutRef.current = window.setTimeout(() => {
+      setError("Streaming timeout: tidak ada respons awal.");
+      finishStream();
+      streamAbortRef.current?.abort();
+    }, FIRST_EVENT_TIMEOUT_MS);
+  }, [clearFirstEventTimer, finishStream]);
+
+  const markStreamActivity = useCallback(() => {
+    clearFirstEventTimer();
+    resetIdleTimer();
+  }, [clearFirstEventTimer, resetIdleTimer]);
 
   const bottomSpace = Math.max(128, inputHeight + edgeSpace);
   const autoScrollThreshold = Math.max(80, bottomSpace);
@@ -112,12 +164,14 @@ function App() {
         didSkipAbortRef.current = true;
         return;
       }
+      clearIdleTimer();
+      clearFirstEventTimer();
       streamAbortRef.current?.abort();
       streamAbortRef.current = null;
       conversationListAbortRef.current?.abort();
       conversationListAbortRef.current = null;
     };
-  }, []);
+  }, [clearFirstEventTimer, clearIdleTimer]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -238,6 +292,25 @@ function App() {
     };
   }, [conversationId, messages.length, userId]);
 
+  const cancelActiveStream = useCallback(
+    async () => {
+      const streamId = activeStreamIdRef.current;
+      if (streamId) {
+        try {
+          await cancelStream({
+            baseUrl: API_BASE,
+            streamId,
+            userId: resolveUserId(userId),
+          });
+        } catch {
+          // best-effort cancel; ignore errors
+        }
+      }
+      streamAbortRef.current?.abort();
+    },
+    [userId],
+  );
+
   const getEventId = useCallback((event: StreamEvent) => {
     if ("bubbleId" in event && event.bubbleId) {
       return event.bubbleId;
@@ -343,15 +416,36 @@ function App() {
       fallbackId: string | undefined,
       controller: AbortController,
     ) => {
+      if ("streamId" in event && event.streamId && !activeStreamIdRef.current) {
+        activeStreamIdRef.current = event.streamId;
+      }
+      if (
+        event.type === "heartbeat" ||
+        event.type === "progress" ||
+        event.type === "started"
+      ) {
+        markStreamActivity();
+        return;
+      }
+
       const eventId = getEventId(event);
 
       if (event.type === "meta" && event.conversationId) {
         setConversationId(event.conversationId);
+        markStreamActivity();
+        return;
+      }
+
+      if (event.type === "interrupted") {
+        markStreamActivity();
+        finishStream();
         return;
       }
 
       if (event.type === "error") {
+        markStreamActivity();
         setError(event.message);
+        finishStream();
         setMessages((prev) => {
           const targetId = eventId ?? fallbackId;
           if (!targetId) return prev;
@@ -363,9 +457,17 @@ function App() {
         return;
       }
 
+      if (event.type === "done" && !event.bubbleId) {
+        markStreamActivity();
+        finishStream();
+        return;
+      }
+
+      markStreamActivity();
+
       updateMessageFromEvent(event, eventId, fallbackId);
     },
-    [getEventId, updateMessageFromEvent],
+    [finishStream, getEventId, markStreamActivity, updateMessageFromEvent],
   );
 
   const refreshConversationList = useCallback(
@@ -407,9 +509,8 @@ function App() {
     (nextUserId: string) => {
       const normalized = setUserId(nextUserId);
       setUserIdState(normalized);
-      streamAbortRef.current?.abort();
-      streamAbortRef.current = null;
-      setIsStreaming(false);
+      void cancelActiveStream();
+      finishStream();
       setIsLoadingHistory(false);
       setConversationId(null);
       setMessages([]);
@@ -419,28 +520,26 @@ function App() {
       skipHistoryRef.current = false;
       void refreshConversationList(normalized);
     },
-    [refreshConversationList],
+    [cancelActiveStream, finishStream, refreshConversationList],
   );
 
   const handleSelectConversation = useCallback((nextConversationId: string) => {
-    streamAbortRef.current?.abort();
-    streamAbortRef.current = null;
-    setIsStreaming(false);
+    void cancelActiveStream();
+    finishStream();
     setIsLoadingHistory(false);
     setConversationId(nextConversationId);
     setMessages([]);
     setError(null);
     shouldAutoScrollRef.current = true;
     skipHistoryRef.current = false;
-  }, []);
+  }, [cancelActiveStream, finishStream]);
 
   const startNewChat = useCallback(
     async (options?: { focusInput?: boolean }) => {
       const shouldFocusInput = options?.focusInput === true;
 
-      streamAbortRef.current?.abort();
-      streamAbortRef.current = null;
-      setIsStreaming(false);
+      await cancelActiveStream();
+      finishStream();
       setIsLoadingHistory(false);
       setError(null);
       setConversationId(null);
@@ -455,6 +554,10 @@ function App() {
       const controller = new AbortController();
       streamAbortRef.current = controller;
       setIsStreaming(true);
+      setIsInterrupting(false);
+      activeStreamIdRef.current = null;
+      startFirstEventTimer();
+      resetIdleTimer();
 
       try {
         await streamChat({
@@ -472,12 +575,21 @@ function App() {
       } finally {
         if (streamAbortRef.current === controller) {
           streamAbortRef.current = null;
-          setIsStreaming(false);
+          finishStream();
         }
         void refreshConversationList();
       }
     },
-    [focusMessageInput, handleStreamEvent, refreshConversationList, userId],
+    [
+      cancelActiveStream,
+      focusMessageInput,
+      handleStreamEvent,
+      refreshConversationList,
+      resetIdleTimer,
+      startFirstEventTimer,
+      userId,
+      finishStream,
+    ],
   );
 
   useEffect(() => {
@@ -512,10 +624,14 @@ function App() {
 
     setMessages((prev) => [...prev, userMessage, assistantMessage]);
 
-    streamAbortRef.current?.abort();
+    await cancelActiveStream();
     const controller = new AbortController();
     streamAbortRef.current = controller;
     setIsStreaming(true);
+    setIsInterrupting(false);
+    activeStreamIdRef.current = null;
+    startFirstEventTimer();
+    resetIdleTimer();
 
     try {
       await streamChat({
@@ -540,11 +656,17 @@ function App() {
     } finally {
       if (streamAbortRef.current === controller) {
         streamAbortRef.current = null;
-        setIsStreaming(false);
+        finishStream();
       }
       void refreshConversationList();
     }
   }
+
+  const handleInterrupt = useCallback(() => {
+    if (!isStreaming || isInterrupting) return;
+    setIsInterrupting(true);
+    void cancelActiveStream();
+  }, [cancelActiveStream, isInterrupting, isStreaming]);
 
   return (
     <div className="h-dvh w-full flex overflow-hidden select-none">
@@ -600,7 +722,10 @@ function App() {
           {/* Input */}
           <MessageInput
             onSend={handleSend}
+            onInterrupt={handleInterrupt}
             disabled={isStreaming}
+            isStreaming={isStreaming}
+            isInterrupting={isInterrupting}
             containerRef={inputContainerRef}
           />
         </div>

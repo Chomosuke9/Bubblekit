@@ -20,7 +20,10 @@ export interface MessageBubbleProps {
 
 export interface MessageInputProps {
   onSend: (text: string) => void;
+  onInterrupt?: () => void;
   disabled?: boolean;
+  isStreaming?: boolean;
+  isInterrupting?: boolean;
   containerRef?: Ref<HTMLDivElement>;
 }
 

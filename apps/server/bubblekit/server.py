@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
 import json
-from typing import Optional, Sequence
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Sequence
 
 from fastapi import FastAPI, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +26,83 @@ from .runtime import (
     set_active_context,
     warn_if_not_done,
 )
+
+
+HEARTBEAT_SECONDS = 15
+IDLE_TIMEOUT_SECONDS = 60
+FIRST_EVENT_TIMEOUT_SECONDS = 30
+
+
+@dataclass
+class ActiveStream:
+    stream_id: str
+    conversation_id: str
+    session: Any
+    queue: asyncio.Queue
+    stream_channel: StreamChannel
+    end_signal: object
+    handler_task: Optional[asyncio.Task] = None
+    reason: str = "done"
+    reason_detail: Optional[str] = None
+    error_message: Optional[str] = None
+    closed: bool = False
+
+    def set_reason(
+        self,
+        reason: str,
+        *,
+        detail: Optional[str] = None,
+        error_message: Optional[str] = None,
+    ) -> None:
+        if self.closed and self.reason != "done":
+            return
+        if self.reason != "done" and self.reason != reason:
+            return
+        self.reason = reason
+        if detail is not None:
+            self.reason_detail = detail
+        if error_message is not None:
+            self.error_message = error_message
+
+    def close(self, reason: Optional[str] = None) -> bool:
+        if self.closed:
+            return False
+
+        if reason:
+            self.set_reason(reason)
+
+        pending = self.session.finalize_pending()
+        warn_if_not_done(pending)
+
+        terminal_event: Dict[str, Any]
+        if self.reason == "error":
+            terminal_event = {
+                "type": "error",
+                "message": self.error_message or "stream error",
+                "reason": self.reason_detail or "error",
+            }
+        elif self.reason == "interrupted":
+            terminal_event = {
+                "type": "interrupted",
+                "reason": self.reason_detail or "interrupted",
+            }
+        else:
+            terminal_event = {
+                "type": "done",
+                "reason": self.reason_detail or "normal",
+            }
+
+        self.stream_channel.emit(terminal_event)
+        self.queue.put_nowait(self.end_signal)
+        self.closed = True
+        return True
+
+    def cancel_handler(self) -> None:
+        if self.handler_task and not self.handler_task.done():
+            self.handler_task.cancel()
+
+
+_active_streams: Dict[str, ActiveStream] = {}
 
 
 class ChatStreamRequest(BaseModel):
@@ -168,15 +247,27 @@ def create_app(
     ):
         user_id = _extract_user_id(user_id_header)
         conversation_id = payload.conversationId or _new_id()
+        stream_id = _new_id()
         session = _store.get_or_create(conversation_id)
         queue: asyncio.Queue = asyncio.Queue()
-        stream_channel = StreamChannel(queue, asyncio.get_running_loop())
+        stream_channel = StreamChannel(queue, asyncio.get_running_loop(), stream_id)
         end_signal = object()
+        active = ActiveStream(
+            stream_id=stream_id,
+            conversation_id=conversation_id,
+            session=session,
+            queue=queue,
+            stream_channel=stream_channel,
+            end_signal=end_signal,
+        )
+        _active_streams[stream_id] = active
 
         async def run_handler() -> None:
             try:
                 if payload.conversationId is None and on.new_chat_handler is not None:
-                    result = _call_new_chat_handler(on.new_chat_handler, conversation_id, user_id)
+                    result = _call_new_chat_handler(
+                        on.new_chat_handler, conversation_id, user_id
+                    )
                     if inspect.isawaitable(result):
                         await result
 
@@ -198,41 +289,97 @@ def create_app(
                 if inspect.isawaitable(result):
                     await result
             except Exception as exc:  # pragma: no cover - stream error path
-                stream_channel.emit({"type": "error", "message": str(exc)})
+                active.set_reason(
+                    "error",
+                    detail="handler_error",
+                    error_message=str(exc),
+                )
             finally:
-                pending = session.finalize_pending()
-                warn_if_not_done(pending)
                 queue.put_nowait(end_signal)
+
+        async def send_heartbeat():
+            try:
+                while not active.closed:
+                    await asyncio.sleep(HEARTBEAT_SECONDS)
+                    if active.closed:
+                        break
+                    stream_channel.emit({"type": "heartbeat"})
+            except asyncio.CancelledError:
+                return
 
         async def event_stream():
             token = set_active_context(session, stream=stream_channel)
             session.attach_stream(stream_channel)
+            first_event_seen = False
 
-            if payload.conversationId is None:
-                stream_channel.emit({"type": "meta", "conversationId": conversation_id})
-
-            handler_task = asyncio.create_task(run_handler())
             try:
+                if payload.conversationId is None:
+                    stream_channel.emit({"type": "meta", "conversationId": conversation_id})
+                stream_channel.emit({"type": "started", "conversationId": conversation_id})
+                stream_channel.emit({"type": "progress", "stage": "processing"})
+
+                handler_task = asyncio.create_task(run_handler())
+                active.handler_task = handler_task
+                heartbeat_task = asyncio.create_task(send_heartbeat())
+
                 while True:
-                    event = await queue.get()
+                    try:
+                        timeout = (
+                            FIRST_EVENT_TIMEOUT_SECONDS
+                            if not first_event_seen
+                            else IDLE_TIMEOUT_SECONDS
+                        )
+                        event = await asyncio.wait_for(queue.get(), timeout=timeout)
+                    except asyncio.TimeoutError:
+                        active.set_reason("interrupted", detail="idle_timeout")
+                        active.close("interrupted")
+                        continue
+
+                    first_event_seen = True
                     if event is end_signal:
+                        if not active.closed:
+                            active.close()
+                            continue
                         break
                     yield json.dumps(event) + "\n"
+
+                if not active.closed:
+                    active.close()
+
+                await asyncio.gather(handler_task, return_exceptions=True)
+                heartbeat_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await heartbeat_task
             except asyncio.CancelledError:
-                if not handler_task.done():
-                    handler_task.cancel()
+                active.set_reason("interrupted", detail="client_abort")
+                active.close("interrupted")
+                active.cancel_handler()
                 raise
             finally:
-                if not handler_task.done():
-                    handler_task.cancel()
-                try:
-                    await handler_task
-                except asyncio.CancelledError:
-                    pass
                 session.detach_stream()
                 stream_channel.close()
                 reset_active_context(token)
+                _active_streams.pop(stream_id, None)
 
-        return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+        return StreamingResponse(
+            event_stream(),
+            media_type="application/x-ndjson",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    @app.post("/api/streams/{stream_id}/cancel")
+    async def cancel_stream(stream_id: str):
+        stream = _active_streams.get(stream_id)
+        if stream is None:
+            return {"status": "not_found"}
+
+        stream.set_reason("interrupted", detail="client_cancel")
+        stream.close("interrupted")
+        stream.cancel_handler()
+        return {"status": "ok"}
 
     return app

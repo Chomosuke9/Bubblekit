@@ -173,23 +173,33 @@ def json_bubble_to_openai(message: Any) -> Dict[str, str]:
 
 
 class StreamChannel:
-    def __init__(self, queue: asyncio.Queue, loop: asyncio.AbstractEventLoop) -> None:
+    def __init__(
+        self, queue: asyncio.Queue, loop: asyncio.AbstractEventLoop, stream_id: str
+    ) -> None:
         self._queue = queue
         self._loop = loop
         self._closed = False
+        self._stream_id = stream_id
+        self._seq = 0
 
     def emit(self, event: Dict[str, Any]) -> None:
         if self._closed:
             return
+
+        payload = dict(event)
+        payload.setdefault("streamId", self._stream_id)
+        self._seq += 1
+        payload.setdefault("seq", self._seq)
+
         try:
             running_loop = asyncio.get_running_loop()
         except RuntimeError:
             running_loop = None
 
         if running_loop is self._loop:
-            self._queue.put_nowait(event)
+            self._queue.put_nowait(payload)
         else:
-            self._loop.call_soon_threadsafe(self._queue.put_nowait, event)
+            self._loop.call_soon_threadsafe(self._queue.put_nowait, payload)
 
     def close(self) -> None:
         self._closed = True
