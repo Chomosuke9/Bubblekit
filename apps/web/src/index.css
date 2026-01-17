@@ -267,6 +267,21 @@
   text-underline-offset: 2px;
 }
 
+.markdown-llm a[data-footnote-ref],
+.markdown-llm a[data-footnote-backref] {
+  color: inherit;
+  text-decoration: none;
+}
+
+.markdown-llm a[data-footnote-ref]:hover,
+.markdown-llm a[data-footnote-backref]:hover {
+  text-decoration: underline;
+}
+
+.markdown-llm :target {
+  scroll-margin-top: 96px;
+}
+
 .markdown-llm ul,
 .markdown-llm ol {
   margin: 0.4em 0 0.4em 1.25em;

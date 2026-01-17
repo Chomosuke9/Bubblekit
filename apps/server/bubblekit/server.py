@@ -352,9 +352,11 @@ def create_app(
                     await heartbeat_task
             except asyncio.CancelledError:
                 active.set_reason("interrupted", detail="client_abort")
+                reason_detail = active.reason_detail
                 active.close("interrupted")
-                active.cancel_handler()
-                raise
+                if reason_detail != "client_abort":
+                    active.cancel_handler()
+                    raise
             finally:
                 session.detach_stream()
                 stream_channel.close()

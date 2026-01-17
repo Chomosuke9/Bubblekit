@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent,
   type ReactNode,
 } from "react";
 import Markdown from "react-markdown";
@@ -150,6 +151,41 @@ function preprocessLatexDelimiters(input: string): string {
       return convertInText(part);
     })
     .join("");
+}
+
+function decodeAnchorId(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+function getInPageAnchorId(href?: string): string | null {
+  if (!href) return null;
+
+  if (href.startsWith("#")) {
+    const rawId = href.slice(1);
+    return rawId ? decodeAnchorId(rawId) : null;
+  }
+
+  if (typeof window === "undefined") return null;
+
+  let url: URL;
+  try {
+    url = new URL(href, window.location.href);
+  } catch {
+    return null;
+  }
+
+  const { origin, pathname, search } = window.location;
+  if (url.origin !== origin) return null;
+  if (url.pathname !== pathname) return null;
+  if (url.search !== search) return null;
+  if (!url.hash) return null;
+
+  const rawId = url.hash.slice(1);
+  return rawId ? decodeAnchorId(rawId) : null;
 }
 
 function extractText(value: ReactNode): string {
@@ -338,7 +374,42 @@ export const MarkdownLLM = memo(function MarkdownLLM({
           rehypePlugins={rehypePlugins}
           skipHtml={safe_mode}
           components={{
-            a: (props) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+            a: (props) => {
+              const { href, onClick, ...rest } = props;
+              const anchorId = getInPageAnchorId(href);
+
+              if (!anchorId) {
+                return (
+                  <a {...rest} href={href} target="_blank" rel="noopener noreferrer" />
+                );
+              }
+
+              const handleAnchorClick = (event: MouseEvent<HTMLAnchorElement>) => {
+                onClick?.(event);
+                if (event.defaultPrevented) return;
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (typeof document === "undefined") return;
+                const target = document.getElementById(anchorId);
+                if (target) {
+                  target.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+
+                if (typeof window === "undefined") return;
+                const currentHash = window.location.hash;
+                const usesHashRouter =
+                  currentHash.startsWith("#/") || currentHash.startsWith("#!");
+                if (!usesHashRouter) {
+                  const nextHash = `#${encodeURIComponent(anchorId)}`;
+                  if (currentHash !== nextHash) {
+                    window.history.replaceState(window.history.state, "", nextHash);
+                  }
+                }
+              };
+
+              return <a {...rest} href={href} onClick={handleAnchorClick} />;
+            },
 
             // Intercept fenced mermaid blocks: ```mermaid ... ```
             pre: ({ children, ...props }) => {
