@@ -293,9 +293,9 @@ function App() {
   }, [conversationId, messages.length, userId]);
 
   const cancelActiveStream = useCallback(
-    async () => {
+    async (mode: "explicit" | "implicit" = "implicit") => {
       const streamId = activeStreamIdRef.current;
-      if (streamId) {
+      if (mode === "explicit" && streamId) {
         try {
           await cancelStream({
             baseUrl: API_BASE,
@@ -538,7 +538,7 @@ function App() {
     async (options?: { focusInput?: boolean }) => {
       const shouldFocusInput = options?.focusInput === true;
 
-      await cancelActiveStream();
+      void cancelActiveStream();
       finishStream();
       setIsLoadingHistory(false);
       setError(null);
@@ -665,7 +665,7 @@ function App() {
   const handleInterrupt = useCallback(() => {
     if (!isStreaming || isInterrupting) return;
     setIsInterrupting(true);
-    void cancelActiveStream();
+    void cancelActiveStream("explicit");
   }, [cancelActiveStream, isInterrupting, isStreaming]);
 
   return (

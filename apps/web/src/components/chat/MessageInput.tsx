@@ -28,6 +28,10 @@ function MessageInput({
 }: MessageInputProps) {
   const [text, setText] = useState<string>("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const hasText = text.trim().length > 0;
+  const canSend = hasText && !disabled;
+  const canStop = isStreaming && Boolean(onInterrupt) && !isInterrupting;
+  const actionDisabled = isStreaming ? !canStop : !canSend;
 
   function doSend() {
     if (disabled) return;
@@ -55,7 +59,7 @@ function MessageInput({
           ref={textareaRef}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && text.trim() && !disabled) {
+            if (e.key === "Enter" && !e.shiftKey && hasText && !disabled) {
               e.preventDefault();
               doSend();
             }
@@ -95,35 +99,32 @@ function MessageInput({
           <InputGroupText className="ml-auto"></InputGroupText>
           {/* Divider */}
           <Separator orientation="vertical" className="h-4!" />
-          {/* Stop button */}
-          {isStreaming && (
-            <InputGroupButton
-              variant="secondary"
-              className="rounded-full"
-              size="icon-xs"
-              disabled={!onInterrupt || isInterrupting}
-              onClick={() => onInterrupt?.()}
-            >
-              {isInterrupting ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Square className="h-4 w-4" aria-hidden="true" />
-              )}
-              <span className="sr-only">Stop</span>
-            </InputGroupButton>
-          )}
-          {/* Send button */}
+          {/* Send/Stop button */}
           <InputGroupButton
-            variant="default"
+            variant={isStreaming ? "secondary" : "default"}
             className="rounded-full"
             size="icon-xs"
-            disabled={!text.trim() || disabled}
+            disabled={actionDisabled}
             onClick={() => {
+              if (isStreaming) {
+                if (canStop) {
+                  onInterrupt?.();
+                }
+                return;
+              }
               doSend();
             }}
           >
-            <ArrowUpIcon />
-            <span className="sr-only">Send</span>
+            {isStreaming ? (
+              isInterrupting ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Square className="h-4 w-4" aria-hidden="true" />
+              )
+            ) : (
+              <ArrowUpIcon />
+            )}
+            <span className="sr-only">{isStreaming ? "Stop" : "Send"}</span>
           </InputGroupButton>
         </InputGroupAddon>
       </InputGroup>
