@@ -107,6 +107,10 @@ function App() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
+  const autoScrollLockRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
+  const prefersReducedMotionRef = useRef(false);
+  const touchStartYRef = useRef<number | null>(null);
   const [inputHeight, setInputHeight] = useState(0);
   const [edgeSpace, setEdgeSpace] = useState(64);
 
@@ -157,6 +161,12 @@ function App() {
 
   const bottomSpace = Math.max(128, inputHeight + edgeSpace);
   const autoScrollThreshold = Math.max(80, bottomSpace);
+  const autoScrollUnlockThreshold = 16;
+
+  const lockAutoScroll = useCallback(() => {
+    autoScrollLockRef.current = true;
+    shouldAutoScrollRef.current = false;
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -186,6 +196,19 @@ function App() {
 
     root.classList.toggle("dark", shouldUseDark);
     setIsDarkMode(shouldUseDark);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updatePreference = () => {
+      prefersReducedMotionRef.current = media.matches;
+    };
+    updatePreference();
+    media.addEventListener?.("change", updatePreference);
+    return () => {
+      media.removeEventListener?.("change", updatePreference);
+    };
   }, []);
 
   function toggleDarkMode() {
@@ -247,13 +270,86 @@ function App() {
   useEffect(() => {
     if (!shouldAutoScrollRef.current) return;
     const frame = requestAnimationFrame(() => {
+      if (!shouldAutoScrollRef.current) return;
       const target = scrollRef.current;
       if (!target) return;
-      target.scrollTo({ top: target.scrollHeight, behavior: "smooth" });
+      const distance =
+        target.scrollHeight - target.scrollTop - target.clientHeight;
+      if (distance <= 1) return;
+      target.scrollTo({
+        top: target.scrollHeight,
+        behavior: prefersReducedMotionRef.current ? "auto" : "smooth",
+      });
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [isStreaming, messages, bottomSpace]);
+  }, [messages, bottomSpace]);
+
+  useEffect(() => {
+    const target = scrollRef.current;
+    if (!target) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0) {
+        lockAutoScroll();
+      }
+    };
+
+    const handleTouchStart = (event: TouchEvent) => {
+      touchStartYRef.current = event.touches[0]?.clientY ?? null;
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      const startY = touchStartYRef.current;
+      if (startY == null) {
+        lockAutoScroll();
+        return;
+      }
+      const currentY = event.touches[0]?.clientY ?? startY;
+      if (currentY > startY + 6) {
+        lockAutoScroll();
+      }
+    };
+
+    const handleTouchEnd = () => {
+      touchStartYRef.current = null;
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const activeElement = document.activeElement as HTMLElement | null;
+      if (activeElement) {
+        const tag = activeElement.tagName;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          activeElement.isContentEditable
+        ) {
+          return;
+        }
+      }
+      if (
+        event.key === "ArrowUp" ||
+        event.key === "PageUp" ||
+        event.key === "Home"
+      ) {
+        lockAutoScroll();
+      }
+    };
+
+    target.addEventListener("wheel", handleWheel, { passive: true });
+    target.addEventListener("touchstart", handleTouchStart, { passive: true });
+    target.addEventListener("touchmove", handleTouchMove, { passive: true });
+    target.addEventListener("touchend", handleTouchEnd, { passive: true });
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      target.removeEventListener("wheel", handleWheel);
+      target.removeEventListener("touchstart", handleTouchStart);
+      target.removeEventListener("touchmove", handleTouchMove);
+      target.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [lockAutoScroll]);
 
   useEffect(() => {
     if (!conversationId || messages.length > 0) return;
@@ -274,6 +370,7 @@ function App() {
       .then((data) => {
         if (!controller.signal.aborted) {
           shouldAutoScrollRef.current = true;
+          autoScrollLockRef.current = false;
           setMessages(data.messages);
         }
       })
@@ -517,6 +614,7 @@ function App() {
       setConversations([]);
       setError(null);
       shouldAutoScrollRef.current = true;
+      autoScrollLockRef.current = false;
       skipHistoryRef.current = false;
       void refreshConversationList(normalized);
     },
@@ -531,6 +629,7 @@ function App() {
     setMessages([]);
     setError(null);
     shouldAutoScrollRef.current = true;
+    autoScrollLockRef.current = false;
     skipHistoryRef.current = false;
   }, [cancelActiveStream, finishStream]);
 
@@ -545,6 +644,7 @@ function App() {
       setConversationId(null);
       setMessages([]);
       shouldAutoScrollRef.current = true;
+      autoScrollLockRef.current = false;
       skipHistoryRef.current = true;
 
       if (shouldFocusInput) {
@@ -606,6 +706,7 @@ function App() {
 
     setError(null);
     shouldAutoScrollRef.current = true;
+    autoScrollLockRef.current = false;
 
     const idBase = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const assistantId = `local-${idBase}-assistant`;
@@ -693,9 +794,26 @@ function App() {
         onScroll={() => {
           const target = scrollRef.current;
           if (!target) return;
+          const currentTop = target.scrollTop;
+          const prevTop = lastScrollTopRef.current;
+          lastScrollTopRef.current = currentTop;
           const distance =
             target.scrollHeight - target.scrollTop - target.clientHeight;
-          shouldAutoScrollRef.current = distance < autoScrollThreshold;
+          const scrolledUp = currentTop < prevTop - 4;
+          const scrolledDown = currentTop > prevTop + 4;
+
+          if (scrolledUp) {
+            autoScrollLockRef.current = true;
+          } else if (
+            autoScrollLockRef.current &&
+            scrolledDown &&
+            distance <= autoScrollUnlockThreshold
+          ) {
+            autoScrollLockRef.current = false;
+          }
+
+          shouldAutoScrollRef.current =
+            !autoScrollLockRef.current && distance <= autoScrollThreshold;
         }}
         className="flex-1 min-w-0 overflow-y-scroll transition-width duration-300 ease-in-out"
       >
@@ -704,12 +822,12 @@ function App() {
         <div className="fixed z-1 top-0 from-neutral-50 dark:from-neutral-950 to-100% bg-linear-180 w-full h-1/12"></div>
         {/* Chat */}
         <div
-          className="mx-auto flex flex-col px-8 max-w-5xl select-text"
+          className="mx-auto flex flex-col px-4 md:px-8 max-w-full md:max-w-3/4 select-text"
           style={{ paddingTop: edgeSpace, paddingBottom: bottomSpace }}
         >
           {isLoadingHistory && (
             <div className="text-sm text-neutral-500 dark:text-neutral-400">
-              Loading history...
+              Loading chat...
             </div>
           )}
           {error && (

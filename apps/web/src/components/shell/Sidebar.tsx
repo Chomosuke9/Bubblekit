@@ -87,7 +87,7 @@ function Sidebar({
         className={[
           "fixed md:static z-50 left-0 bg-neutral-100 dark:bg-neutral-900 h-full @container flex flex-col",
           "transform transition-all duration-300 ease-in-out will-change-transform",
-          isOpen ? "w-5/6 md:w-96" : "w-0 md:w-20",
+          isOpen ? "w-5/6 md:w-96" : "w-0 md:w-15",
         ].join(" ")}
       >
         {/* Top bar */}

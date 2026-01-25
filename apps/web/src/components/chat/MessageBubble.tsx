@@ -233,7 +233,20 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
                   ? message.content
                   : String(message.content ?? "")
               }
+              className={[
+                "prose max-w-none dark:prose-invert",
+                "prose-p:my-3 prose-p:leading-relaxed",
+                "prose-headings:mt-4 prose-headings:mb-2 prose-headings:font-semibold",
+                "prose-ul:my-3 prose-ol:my-3 prose-li:my-1",
+                "prose-hr:my-4 prose-hr:border-neutral-200/60 dark:prose-hr:border-neutral-800/80",
+                "prose-blockquote:my-3 prose-blockquote:border-l-neutral-300 dark:prose-blockquote:border-l-neutral-700",
+                "prose-blockquote:bg-neutral-50/60 dark:prose-blockquote:bg-neutral-900/40",
+                "prose-blockquote:rounded-xl prose-blockquote:px-3 prose-blockquote:py-2",
+                "prose-code:rounded-md prose-code:bg-neutral-200/60 dark:prose-code:bg-neutral-700/40 prose-code:px-1 prose-code:py-0.5",
+                "prose-a:underline prose-a:decoration-neutral-400/50 dark:prose-a:decoration-neutral-500/50 prose-a:underline-offset-4",
+              ].join(" ")}
             />
+
           </div>
         </div>
       </div>
