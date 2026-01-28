@@ -68,6 +68,11 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
   const headerIsHidden = config?.header_is_hidden === true;
   const showHeader = !headerIsHidden && (showIcon || showName);
   const isTool = message.type === "tool";
+  const contentText =
+    typeof message.content === "string"
+      ? message.content
+      : String(message.content ?? "");
+  const isContentEmpty = contentText.trim().length === 0;
   const isCollapsible = config?.collapsible === true;
   const collapsibleTitle =
     isCollapsible
@@ -117,7 +122,8 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
   const toolClass = isTool
     ? "border-dashed border-neutral-300/70 bg-neutral-50/80 text-neutral-700 dark:border-neutral-700/70 dark:bg-neutral-900/50 dark:text-neutral-200"
     : "";
-  const bubblePaddingY = headerIsHidden ? "py-0" : "py-2";
+  const useCompactSpacing = headerIsHidden || isContentEmpty;
+  const bubblePaddingY = useCompactSpacing ? "py-0" : "py-2";
 
   if (isCollapsible) {
     const expandedMaxHeight =
@@ -139,7 +145,7 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
       className={[
         "flex",
         isUser ? "justify-end" : "justify-start",
-        headerIsHidden ? "mb-1" : "mb-3",
+        useCompactSpacing ? "mb-1" : "mb-3",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -152,7 +158,7 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
             isUser ? "max-w-4/5" : "max-w-full",
             "flex-col",
             isUser ? "items-end" : "items-start",
-            headerIsHidden ? "gap-0" : "gap-1",
+            useCompactSpacing ? "gap-0" : "gap-1",
           ]
             .filter(Boolean)
             .join(" ")
@@ -228,11 +234,7 @@ function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
             aria-hidden={isCollapsible ? isCollapsed : false}
           >
             <MarkdownLLM
-              markdown={
-                typeof message.content === "string"
-                  ? message.content
-                  : String(message.content ?? "")
-              }
+              markdown={contentText}
               className={[
                 "prose max-w-none dark:prose-invert",
                 "prose-p:my-3 prose-p:leading-relaxed",
