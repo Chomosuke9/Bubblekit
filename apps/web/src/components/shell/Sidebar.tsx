@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -27,39 +27,10 @@ function Sidebar({
   const [isOpen, setIsOpen] = useState(false);
   const [userIdDraft, setUserIdDraft] = useState(userId);
   const [searchTerm, setSearchTerm] = useState("");
-  const [scrollTop, setScrollTop] = useState(0);
-  const [listHeight, setListHeight] = useState(0);
-  const listContainerRef = useRef<HTMLDivElement | null>(null);
-
-  const itemHeight = 60;
-  const itemGap = 4;
-  const itemSize = itemHeight + itemGap;
-  const overscan = 6;
 
   useEffect(() => {
     setUserIdDraft(userId);
   }, [userId]);
-
-  useEffect(() => {
-    const listElement = listContainerRef.current;
-    if (!listElement) return;
-
-    const updateHeight = () => {
-      setListHeight(listElement.clientHeight);
-    };
-
-    updateHeight();
-
-    const resizeObserver = new ResizeObserver(() => {
-      updateHeight();
-    });
-
-    resizeObserver.observe(listElement);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, []);
 
   function toggleSidebar() {
     if (isOpen) setIsOpen(false);
@@ -108,25 +79,6 @@ function Sidebar({
       .sort((a, b) => b.score - a.score)
       .map(({ conversation }) => conversation);
   }, [conversations, searchTerm]);
-
-  const filteredConversationsWithMeta = useMemo(
-    () =>
-      filteredConversations.map((conversation) => ({
-        ...conversation,
-        formattedDate: new Date(conversation.updatedAt).toLocaleString(),
-      })),
-    [filteredConversations],
-  );
-
-  const totalItems = filteredConversationsWithMeta.length;
-  const totalHeight = totalItems * itemSize;
-  const startIndex = Math.max(0, Math.floor(scrollTop / itemSize) - overscan);
-  const endIndex = Math.min(
-    totalItems,
-    Math.ceil((scrollTop + listHeight) / itemSize) + overscan,
-  );
-  const visibleConversations = filteredConversationsWithMeta.slice(startIndex, endIndex);
-  const offsetY = startIndex * itemSize;
 
   return (
     <>
@@ -180,7 +132,7 @@ function Sidebar({
 
         {/* Main Bar */}
         {/* Sidebar: Scrollable content */}
-        <div className="flex-1 min-h-0">
+        <div className={isOpen? "flex-1 overflow-y-scroll" : "flex-1 overflow-y-hidden"}>
           <div>
             {/* New chat */}
             <GenerateMainBar
@@ -219,52 +171,45 @@ function Sidebar({
                 </div>
 
                 {/* History */}
-                {conversations.length === 0 ? (
-                  <p className="text-sm text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
-                    No conversations yet.
-                  </p>
-                ) : filteredConversationsWithMeta.length === 0 ? (
-                  <p className="text-sm text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
-                    No conversations found.
-                  </p>
-                ) : (
-                  <div
-                    ref={listContainerRef}
-                    onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
-                    className="min-w-0 max-h-[60vh] overflow-y-auto"
-                  >
-                    <div style={{ height: totalHeight }} className="relative">
-                      <div style={{ transform: `translateY(${offsetY}px)` }} className="space-y-1">
-                        {visibleConversations.map((conversation) => {
-                          const isSelected = conversation.id === selectedConversationId;
+                <div className="space-y-1 min-w-0">
+                  {conversations.length === 0 ? (
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
+                      No conversations yet.
+                    </p>
+                  ) : filteredConversations.length === 0 ? (
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
+                      No conversations found.
+                    </p>
+                  ) : (
+                    filteredConversations.map((conversation) => {
+                      const isSelected = conversation.id === selectedConversationId;
+                      const formattedDate = new Date(conversation.updatedAt).toLocaleString();
 
-                          return (
-                            <button
-                              key={conversation.id}
-                              type="button"
-                              aria-current={isSelected}
-                              onClick={() => onSelectConversation(conversation.id)}
-                              className={[
-                                "w-full rounded-lg border px-3 py-2 text-left transition-colors h-[60px] flex flex-col justify-center",
-                                "border-neutral-200 dark:border-neutral-800",
-                                isSelected
-                                  ? "bg-neutral-200/70 dark:bg-neutral-800"
-                                  : "hover:bg-neutral-200/60 dark:hover:bg-neutral-800/70",
-                              ].join(" ")}
-                            >
-                              <div className="truncate text-sm font-medium text-neutral-900 dark:text-neutral-100 leading-tight min-w-0">
-                                {conversation.title}
-                              </div>
-                              <div className="truncate text-[11px] text-neutral-500 dark:text-neutral-400 leading-tight mt-0.5 min-w-0">
-                                Updated {conversation.formattedDate}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                      return (
+                        <button
+                          key={conversation.id}
+                          type="button"
+                          aria-current={isSelected}
+                          onClick={() => onSelectConversation(conversation.id)}
+                          className={[
+                            "w-full rounded-lg border px-3 py-2 text-left transition-colors h-[60px] flex flex-col justify-center",
+                            "border-neutral-200 dark:border-neutral-800",
+                            isSelected
+                              ? "bg-neutral-200/70 dark:bg-neutral-800"
+                              : "hover:bg-neutral-200/60 dark:hover:bg-neutral-800/70",
+                          ].join(" ")}
+                        >
+                          <div className="truncate text-sm font-medium text-neutral-900 dark:text-neutral-100 leading-tight min-w-0">
+                            {conversation.title}
+                          </div>
+                          <div className="truncate text-[11px] text-neutral-500 dark:text-neutral-400 leading-tight mt-0.5 min-w-0">
+                            Updated {formattedDate}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
           </div>
