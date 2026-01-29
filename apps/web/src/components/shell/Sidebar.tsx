@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -27,10 +27,35 @@ function Sidebar({
   const [isOpen, setIsOpen] = useState(false);
   const [userIdDraft, setUserIdDraft] = useState(userId);
   const [searchTerm, setSearchTerm] = useState("");
+  const listViewportRef = useRef<HTMLDivElement | null>(null);
+  const [listViewportHeight, setListViewportHeight] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
+
+  const itemHeight = 60;
+  const itemGap = 4;
+  const overscan = 6;
 
   useEffect(() => {
     setUserIdDraft(userId);
   }, [userId]);
+
+  useEffect(() => {
+    const viewport = listViewportRef.current;
+    if (!viewport) return undefined;
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        setListViewportHeight(entry.contentRect.height);
+      }
+    });
+
+    observer.observe(viewport);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   function toggleSidebar() {
     if (isOpen) setIsOpen(false);
@@ -79,6 +104,37 @@ function Sidebar({
       .sort((a, b) => b.score - a.score)
       .map(({ conversation }) => conversation);
   }, [conversations, searchTerm]);
+
+  const formattedDates = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+
+    return new Map(
+      conversations.map((conversation) => [
+        conversation.id,
+        formatter.format(new Date(conversation.updatedAt)),
+      ]),
+    );
+  }, [conversations]);
+
+  const totalItems = filteredConversations.length;
+  const itemSize = itemHeight + itemGap;
+  const totalHeight =
+    totalItems === 0 ? 0 : totalItems * itemHeight + (totalItems - 1) * itemGap;
+  const startIndex = totalItems === 0
+    ? 0
+    : Math.max(0, Math.floor(scrollTop / itemSize) - overscan);
+  const endIndex = totalItems === 0
+    ? -1
+    : Math.min(
+      totalItems - 1,
+      Math.floor((scrollTop + listViewportHeight) / itemSize) + overscan,
+    );
+  const visibleConversations =
+    totalItems === 0 ? [] : filteredConversations.slice(startIndex, endIndex + 1);
+  const offsetY = startIndex * itemSize;
 
   return (
     <>
@@ -132,7 +188,7 @@ function Sidebar({
 
         {/* Main Bar */}
         {/* Sidebar: Scrollable content */}
-        <div className={isOpen? "flex-1 overflow-y-scroll" : "flex-1 overflow-y-hidden"}>
+        <div className={isOpen ? "flex flex-col flex-1 min-h-0" : "flex flex-col flex-1 min-h-0"}>
           <div>
             {/* New chat */}
             <GenerateMainBar
@@ -147,7 +203,7 @@ function Sidebar({
 
           {/* Conversations section */}
           <div
-            className={`grid overflow-hidden ease-in-out
+            className={`grid overflow-hidden ease-in-out flex-1 min-h-0
               ${isOpen
                 ? "grid-rows-[1fr] opacity-100"
                 : "grid-rows-[0fr] opacity-0 pointer-events-none"
@@ -161,8 +217,8 @@ function Sidebar({
             }}
 
           >
-            <div className="min-h-0 min-w-0">
-              <div className="mt-3 px-3 overflow-x-hidden">
+            <div className="min-h-0 min-w-0 flex flex-col">
+              <div className="mt-3 px-3 overflow-x-hidden flex flex-col flex-1 min-h-0">
                 {/* Conversations header */}
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">
@@ -171,7 +227,11 @@ function Sidebar({
                 </div>
 
                 {/* History */}
-                <div className="space-y-1 min-w-0">
+                <div
+                  ref={listViewportRef}
+                  onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+                  className="min-w-0 flex-1 min-h-0 overflow-y-auto"
+                >
                   {conversations.length === 0 ? (
                     <p className="text-sm text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
                       No conversations yet.
@@ -181,33 +241,44 @@ function Sidebar({
                       No conversations found.
                     </p>
                   ) : (
-                    filteredConversations.map((conversation) => {
-                      const isSelected = conversation.id === selectedConversationId;
-                      const formattedDate = new Date(conversation.updatedAt).toLocaleString();
+                    <div
+                      className="relative min-w-0"
+                      style={{ height: `${totalHeight}px` }}
+                    >
+                      <div
+                        className="absolute left-0 right-0 flex flex-col min-w-0 gap-1"
+                        style={{ transform: `translateY(${offsetY}px)` }}
+                      >
+                        {visibleConversations.map((conversation) => {
+                          const isSelected = conversation.id === selectedConversationId;
+                          const formattedDate =
+                            formattedDates.get(conversation.id) ?? "";
 
-                      return (
-                        <button
-                          key={conversation.id}
-                          type="button"
-                          aria-current={isSelected}
-                          onClick={() => onSelectConversation(conversation.id)}
-                          className={[
-                            "w-full rounded-lg border px-3 py-2 text-left transition-colors h-[60px] flex flex-col justify-center",
-                            "border-neutral-200 dark:border-neutral-800",
-                            isSelected
-                              ? "bg-neutral-200/70 dark:bg-neutral-800"
-                              : "hover:bg-neutral-200/60 dark:hover:bg-neutral-800/70",
-                          ].join(" ")}
-                        >
-                          <div className="truncate text-sm font-medium text-neutral-900 dark:text-neutral-100 leading-tight min-w-0">
-                            {conversation.title}
-                          </div>
-                          <div className="truncate text-[11px] text-neutral-500 dark:text-neutral-400 leading-tight mt-0.5 min-w-0">
-                            Updated {formattedDate}
-                          </div>
-                        </button>
-                      );
-                    })
+                          return (
+                            <button
+                              key={conversation.id}
+                              type="button"
+                              aria-current={isSelected}
+                              onClick={() => onSelectConversation(conversation.id)}
+                              className={[
+                                "w-full rounded-lg border px-3 py-2 text-left transition-colors h-[60px] flex flex-col justify-center",
+                                "border-neutral-200 dark:border-neutral-800",
+                                isSelected
+                                  ? "bg-neutral-200/70 dark:bg-neutral-800"
+                                  : "hover:bg-neutral-200/60 dark:hover:bg-neutral-800/70",
+                              ].join(" ")}
+                            >
+                              <div className="truncate text-sm font-medium text-neutral-900 dark:text-neutral-100 leading-tight min-w-0">
+                                {conversation.title}
+                              </div>
+                              <div className="truncate text-[11px] text-neutral-500 dark:text-neutral-400 leading-tight mt-0.5 min-w-0">
+                                Updated {formattedDate}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
