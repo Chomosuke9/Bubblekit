@@ -1,0 +1,10 @@
+{
+  "name": "Bubblekit",
+  "short_name": "Bubblekit",
+  "description": "Chat UI for Bubblekit",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#f8fafc",
+  "background_color": "#f8fafc",
+  "icons": []
+}

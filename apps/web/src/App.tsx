@@ -14,6 +14,12 @@ import {
 import { isDesktopLike } from "@/lib/device";
 import { Moon, Sun } from "lucide-react";
 import { getUserId, resolveUserId, setUserId } from "@/lib/userId";
+import {
+  loadConversations,
+  loadHistory,
+  saveConversations,
+  saveHistory,
+} from "@/lib/localCache";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 const FIRST_EVENT_TIMEOUT_MS = 30_000;
@@ -88,7 +94,9 @@ function mergeConfigPatch(
 
 function App() {
   const [userId, setUserIdState] = useState<string>(() => getUserId());
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [conversations, setConversations] = useState<ConversationSummary[]>(
+    () => loadConversations(),
+  );
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -372,11 +380,20 @@ function App() {
           shouldAutoScrollRef.current = true;
           autoScrollLockRef.current = false;
           setMessages(data.messages);
+          saveHistory(conversationId, data.messages);
         }
       })
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
-        setError("Gagal memuat riwayat pesan.");
+        const cached = loadHistory(conversationId);
+        if (cached.length > 0) {
+          shouldAutoScrollRef.current = true;
+          autoScrollLockRef.current = false;
+          setMessages(cached);
+          setError("Menampilkan riwayat dari cache (offline).");
+        } else {
+          setError("Gagal memuat riwayat pesan.");
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) {
@@ -582,9 +599,14 @@ function App() {
         });
         if (!controller.signal.aborted) {
           setConversations(list);
+          saveConversations(list);
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return;
+        const cached = loadConversations();
+        if (!controller.signal.aborted && cached.length > 0) {
+          setConversations(cached);
+        }
       } finally {
         if (conversationListAbortRef.current === controller) {
           conversationListAbortRef.current = null;
@@ -601,6 +623,42 @@ function App() {
       conversationListAbortRef.current = null;
     };
   }, [refreshConversationList]);
+
+  useEffect(() => {
+    if (!conversationId || messages.length === 0) return;
+    saveHistory(conversationId, messages);
+  }, [conversationId, messages]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncOnOnline = async () => {
+      if (!navigator.onLine) return;
+
+      try {
+        const list = await fetchConversationList({
+          baseUrl: API_BASE,
+          userId: resolveUserId(userId),
+        });
+        setConversations(list);
+        saveConversations(list);
+
+        if (conversationId) {
+          const data = await fetchMessageHistory(conversationId, {
+            baseUrl: API_BASE,
+            userId: resolveUserId(userId),
+          });
+          setMessages(data.messages);
+          saveHistory(conversationId, data.messages);
+        }
+      } catch {
+        // keep cached data when sync fails
+      }
+    };
+
+    window.addEventListener("online", syncOnOnline);
+    return () => window.removeEventListener("online", syncOnOnline);
+  }, [conversationId, userId]);
 
   const handleChangeUserId = useCallback(
     (nextUserId: string) => {
