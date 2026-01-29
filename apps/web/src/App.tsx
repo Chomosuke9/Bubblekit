@@ -11,6 +11,13 @@ import {
   type ConversationSummary,
   type StreamEvent,
 } from "@/lib/chatApi";
+import {
+  getLocalConversations,
+  getLocalMessageCount,
+  getLocalMessages,
+  saveLocalConversations,
+  saveLocalMessages,
+} from "@/lib/localDb";
 import { isDesktopLike } from "@/lib/device";
 import { Moon, Sun } from "lucide-react";
 import { getUserId, resolveUserId, setUserId } from "@/lib/userId";
@@ -95,6 +102,9 @@ function App() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isInterrupting, setIsInterrupting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(
+    () => typeof navigator !== "undefined" ? navigator.onLine : true,
+  );
   const [isDarkMode, setIsDarkMode] = useState(false);
   const streamAbortRef = useRef<AbortController | null>(null);
   const conversationListAbortRef = useRef<AbortController | null>(null);
@@ -159,6 +169,78 @@ function App() {
     resetIdleTimer();
   }, [clearFirstEventTimer, resetIdleTimer]);
 
+  const loadLocalConversationList = useCallback(
+    async (overrideUserId?: string) => {
+      const activeUserId = resolveUserId(overrideUserId ?? userId);
+      try {
+        const local = await getLocalConversations(activeUserId);
+        setConversations(local);
+      } catch {
+        // ignore local read errors
+      }
+    },
+    [userId],
+  );
+
+  const loadConversationHistory = useCallback(
+    async (
+      targetConversationId: string,
+      options?: { signal?: AbortSignal; preferLocal?: boolean },
+    ) => {
+      const activeUserId = resolveUserId(userId);
+      const shouldUseLocal = options?.preferLocal || !isOnline;
+
+      if (shouldUseLocal) {
+        try {
+          const local = await getLocalMessages(activeUserId, targetConversationId);
+          if (!options?.signal?.aborted) {
+            shouldAutoScrollRef.current = true;
+            autoScrollLockRef.current = false;
+            setMessages(local);
+            if (local.length === 0) {
+              setError("Riwayat offline belum tersedia.");
+            }
+          }
+        } catch {
+          if (!options?.signal?.aborted) {
+            setError("Gagal memuat riwayat offline.");
+          }
+        }
+        return;
+      }
+
+      const data = await fetchMessageHistory(targetConversationId, {
+        baseUrl: API_BASE,
+        userId: activeUserId,
+        signal: options?.signal,
+      });
+
+      if (!options?.signal?.aborted) {
+        shouldAutoScrollRef.current = true;
+        autoScrollLockRef.current = false;
+        setMessages(data.messages);
+        void saveLocalMessages(activeUserId, targetConversationId, data.messages);
+      }
+    },
+    [isOnline, userId],
+  );
+
+  const scheduleIdleCallback = useCallback((task: () => void) => {
+    if (typeof window === "undefined") return null;
+    const idleWindow = window as typeof window & {
+      requestIdleCallback?: (callback: IdleRequestCallback) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    if (idleWindow.requestIdleCallback) {
+      const id = idleWindow.requestIdleCallback(() => task());
+      return { type: "idle" as const, id };
+    }
+
+    const id = window.setTimeout(task, 1000);
+    return { type: "timeout" as const, id };
+  }, []);
+
   const bottomSpace = Math.max(128, inputHeight + edgeSpace);
   const autoScrollThreshold = Math.max(80, bottomSpace);
   const autoScrollUnlockThreshold = 16;
@@ -196,6 +278,26 @@ function App() {
 
     root.classList.toggle("dark", shouldUseDark);
     setIsDarkMode(shouldUseDark);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleOnline = () => {
+      setIsOnline(true);
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, []);
 
   useEffect(() => {
@@ -362,21 +464,19 @@ function App() {
     setIsLoadingHistory(true);
     setError(null);
 
-    fetchMessageHistory(conversationId, {
-      baseUrl: API_BASE,
-      userId: resolveUserId(userId),
-      signal: controller.signal,
-    })
-      .then((data) => {
-        if (!controller.signal.aborted) {
-          shouldAutoScrollRef.current = true;
-          autoScrollLockRef.current = false;
-          setMessages(data.messages);
-        }
-      })
-      .catch((err: unknown) => {
+    loadConversationHistory(conversationId, { signal: controller.signal })
+      .catch(async (err: unknown) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
-        setError("Gagal memuat riwayat pesan.");
+        try {
+          await loadConversationHistory(conversationId, {
+            signal: controller.signal,
+            preferLocal: true,
+          });
+        } catch {
+          if (!controller.signal.aborted) {
+            setError("Gagal memuat riwayat pesan.");
+          }
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) {
@@ -387,7 +487,7 @@ function App() {
     return () => {
       controller.abort();
     };
-  }, [conversationId, messages.length, userId]);
+  }, [conversationId, loadConversationHistory, messages.length]);
 
   const cancelActiveStream = useCallback(
     async (mode: "explicit" | "implicit" = "implicit") => {
@@ -575,6 +675,11 @@ function App() {
       const activeUserId = resolveUserId(overrideUserId ?? userId);
 
       try {
+        if (!isOnline) {
+          await loadLocalConversationList(activeUserId);
+          return;
+        }
+
         const list = await fetchConversationList({
           baseUrl: API_BASE,
           signal: controller.signal,
@@ -582,17 +687,23 @@ function App() {
         });
         if (!controller.signal.aborted) {
           setConversations(list);
+          void saveLocalConversations(activeUserId, list);
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return;
+        await loadLocalConversationList(activeUserId);
       } finally {
         if (conversationListAbortRef.current === controller) {
           conversationListAbortRef.current = null;
         }
       }
     },
-    [userId],
+    [isOnline, loadLocalConversationList, userId],
   );
+
+  useEffect(() => {
+    void loadLocalConversationList();
+  }, [loadLocalConversationList]);
 
   useEffect(() => {
     void refreshConversationList();
@@ -601,6 +712,14 @@ function App() {
       conversationListAbortRef.current = null;
     };
   }, [refreshConversationList]);
+
+  useEffect(() => {
+    if (!isOnline) return;
+    void refreshConversationList();
+    if (conversationId && messages.length === 0) {
+      void loadConversationHistory(conversationId);
+    }
+  }, [conversationId, isOnline, loadConversationHistory, messages.length, refreshConversationList]);
 
   const handleChangeUserId = useCallback(
     (nextUserId: string) => {
@@ -616,9 +735,10 @@ function App() {
       shouldAutoScrollRef.current = true;
       autoScrollLockRef.current = false;
       skipHistoryRef.current = false;
+      void loadLocalConversationList(normalized);
       void refreshConversationList(normalized);
     },
-    [cancelActiveStream, finishStream, refreshConversationList],
+    [cancelActiveStream, finishStream, loadLocalConversationList, refreshConversationList],
   );
 
   const handleSelectConversation = useCallback((nextConversationId: string) => {
@@ -698,6 +818,74 @@ function App() {
     didInitChatRef.current = true;
     void startNewChat();
   }, [conversationId, isStreaming, messages.length, startNewChat]);
+
+  useEffect(() => {
+    if (!conversationId || messages.length === 0) return;
+    const activeUserId = resolveUserId(userId);
+    const timeoutId = window.setTimeout(() => {
+      void saveLocalMessages(activeUserId, conversationId, messages);
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [conversationId, messages, userId]);
+
+  useEffect(() => {
+    if (!isOnline || isStreaming || conversations.length === 0) return;
+    let cancelled = false;
+    const activeUserId = resolveUserId(userId);
+    const orderedConversations = [...conversations].sort(
+      (a, b) => b.updatedAt - a.updatedAt,
+    );
+
+    const prefetch = async () => {
+      for (const conversation of orderedConversations) {
+        if (cancelled) return;
+        if (conversation.id === conversationId) continue;
+        const existingCount = await getLocalMessageCount(
+          activeUserId,
+          conversation.id,
+        );
+        if (existingCount > 0) continue;
+
+        try {
+          const data = await fetchMessageHistory(conversation.id, {
+            baseUrl: API_BASE,
+            userId: activeUserId,
+          });
+          if (cancelled) return;
+          await saveLocalMessages(activeUserId, conversation.id, data.messages);
+        } catch {
+          // ignore prefetch errors
+        }
+      }
+    };
+
+    const idleHandle = scheduleIdleCallback(() => {
+      void prefetch();
+    });
+
+    return () => {
+      cancelled = true;
+      if (!idleHandle) return;
+      if (idleHandle.type === "idle") {
+        const idleWindow = window as typeof window & {
+          cancelIdleCallback?: (id: number) => void;
+        };
+        idleWindow.cancelIdleCallback?.(idleHandle.id);
+      } else {
+        window.clearTimeout(idleHandle.id);
+      }
+    };
+  }, [
+    conversationId,
+    conversations,
+    isOnline,
+    isStreaming,
+    scheduleIdleCallback,
+    userId,
+  ]);
 
   async function handleSend(text: string) {
     if (isStreaming) return;
