@@ -3,10 +3,6 @@ import type { Message } from "@/types/Message";
 
 type MessageId = string | number;
 
-interface ConversationRecord extends ConversationSummary {
-  userId: string;
-}
-
 interface MessageRecord extends Message {
   userId: string;
   conversationId: string;
@@ -50,6 +46,17 @@ function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
   });
 }
 
+function continueCursor<T>(
+  cursorRequest: IDBRequest<T>,
+  cursor: IDBCursor,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    cursorRequest.onsuccess = () => resolve(cursorRequest.result);
+    cursorRequest.onerror = () => reject(cursorRequest.error);
+    cursor.continue();
+  });
+}
+
 function transactionDone(tx: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve();
@@ -78,10 +85,11 @@ export async function saveConversations(
   const store = tx.objectStore(CONVERSATION_STORE);
   const index = store.index("by-user");
   const range = IDBKeyRange.only(userId);
-  let cursor = await requestToPromise(index.openCursor(range));
+  const cursorRequest = index.openCursor(range);
+  let cursor = await requestToPromise(cursorRequest);
   while (cursor) {
     cursor.delete();
-    cursor = await requestToPromise(cursor.continue());
+    cursor = await continueCursor(cursorRequest, cursor);
   }
   for (const conversation of conversations) {
     store.put({ ...conversation, userId });
@@ -115,10 +123,11 @@ export async function replaceCachedMessages(
   const store = tx.objectStore(MESSAGE_STORE);
   const index = store.index("by-conversation");
   const range = IDBKeyRange.only([userId, conversationId]);
-  let cursor = await requestToPromise(index.openCursor(range));
+  const cursorRequest = index.openCursor(range);
+  let cursor = await requestToPromise(cursorRequest);
   while (cursor) {
     cursor.delete();
-    cursor = await requestToPromise(cursor.continue());
+    cursor = await continueCursor(cursorRequest, cursor);
   }
   for (const message of messages) {
     const record: MessageRecord = {
